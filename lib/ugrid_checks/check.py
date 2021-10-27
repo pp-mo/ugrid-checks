@@ -5,7 +5,7 @@ from typing import AnyStr, Union
 from .nc_dataset_scan import NcFileSummary, scan_dataset
 from .scan_utils import property_as_single_name, vars_w_props
 
-__all__ = ["check_dataset", "report_statement_logrecords", "reset_reports"]
+__all__ = ["check_dataset"]
 
 #
 # Crude message logging, for now
@@ -40,7 +40,7 @@ def reset_reports():
     _HANDLER.reset()
 
 
-def enable_printout(print_statements=True):
+def enable_reports_printout(print_statements=True):
     global _ENABLE_PRINT
     _ENABLE_PRINT = print_statements
 
@@ -56,10 +56,6 @@ def report(msg, level=logging.INFO, *args):
     _LOG.log(level, msg, *args)
 
 
-def printonly(msg, *args):
-    report(msg, logging.DEBUG, *args)
-
-
 def _statement(vartype, var, msg):
     if vartype:
         result = vartype + f" variable {var.name}"
@@ -69,32 +65,33 @@ def _statement(vartype, var, msg):
     return result
 
 
-def warn(vartype, var, msg, a_num=0):
-    global _N_WARNINGS
-    _N_WARNINGS += 1
-    msg = f"... WARN A{a_num:03d} : " + _statement(vartype, var, msg)
-    report(msg, logging.WARN, a_num)
-
-
-def fail(vartype, var, msg, r_num=0):
-    global _N_FAILURES
-    _N_FAILURES += 1
-    msg = f"*** FAIL R{r_num:03d} : " + _statement(vartype, var, msg)
-    report(msg, logging.ERROR, r_num)
-
-
 def state(statement: str, vartype, var, msg):
+    global _N_WARNINGS, _N_FAILURES
+    assert len(statement) >= 1
     statement_type = statement[0]
+    assert statement_type in ("R", "A", "?")
     try:
         statement_num = int(statement[1:])
     except ValueError:
         statement_num = 0
     if statement_type == "R":
-        fail(vartype, var, msg, statement_num)
+        _N_FAILURES += 1
+        msg = f"*** FAIL R{statement_num:03d} : " + _statement(
+            vartype, var, msg
+        )
+        report(msg, logging.ERROR, statement_num)
     elif statement_type == "A":
-        warn(vartype, var, msg, statement_num)
-    else:
+        _N_WARNINGS += 1
+        msg = f"... WARN A{statement_num:03d} : " + _statement(
+            vartype, var, msg
+        )
+        report(msg, logging.WARN, statement_num)
+    elif statement_type == "?":
         report(_statement(vartype, var, msg))
+
+
+def printonly(msg, *args):
+    report(msg, logging.DEBUG, *args)
 
 
 _VALID_CONNECTIVITY_ROLES = [
@@ -252,9 +249,13 @@ def check_dataset(
         Item to scan : an :class:`~ugrid_checks.nc_dataset_scan.NcFileSummary`,
         or a string or filepath object.
 
+    Return:
+    * logs
+        A list of LogRecords representing checker statements.
+
     """
     reset_reports()
-    enable_printout(print_results)
+    enable_reports_printout(print_results)
 
     if isinstance(scan, str):
         scan = Path(scan)
@@ -274,3 +275,5 @@ def check_dataset(
         print("Logged reports:")
         for log_report in _HANDLER.logs:
             print(f"  {log_report}")
+
+    return report_statement_logrecords()
