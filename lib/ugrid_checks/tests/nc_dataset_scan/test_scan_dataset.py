@@ -21,5 +21,5 @@ class TestScan(tests.TestCase):
         print(data)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     tests.main()
