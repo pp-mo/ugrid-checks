@@ -1,1 +1,1 @@
-from .check import check_data
+from .check import check_dataset
