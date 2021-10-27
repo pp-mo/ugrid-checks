@@ -58,9 +58,9 @@ def report(msg, level=logging.INFO, *args):
 
 def _statement(vartype, var, msg):
     if vartype:
-        result = vartype + f" variable {var.name}"
+        result = vartype + f' variable "{var.name}"'
     else:
-        result = f"Variable {var.name}"
+        result = f'Variable "{var.name}"'
     result += f" {msg}"
     return result
 
@@ -183,7 +183,7 @@ def check_dataset_inner(scan):
                 mrv_var,
                 (
                     f"variable {mrv_name} has attribute "
-                    "\"mesh='{meshprop}'\", which is not a "
+                    f"\"mesh='{meshprop}'\", which is not a "
                     "valid variable name."
                 ),
             )
@@ -255,6 +255,7 @@ def check_dataset(
 
     """
     reset_reports()
+    # print_results, print_summary = True, True
     enable_reports_printout(print_results)
 
     if isinstance(scan, str):
@@ -264,11 +265,13 @@ def check_dataset(
 
     check_dataset_inner(scan)
 
-    # fail('oops')
     # from .nc_dataset_scan import NcVariableSummary
     # dummyvar = NcVariableSummary('dummyvar', (), (), None, {}, None)
-    # warn('Dummy', dummyvar, 'test warning message')
+    # state('?', 'Dummy', dummyvar, 'test warning message')
+    # state('R123', 'Dummy', dummyvar, 'failure')
+    # state('A123', 'Dummy', dummyvar, 'recommendation')
     # report('test non-warning message')
+
     if print_summary:
         printout_reports()
         print("")

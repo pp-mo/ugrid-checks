@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 import unittest as tests
 
+import numpy as np
 import ugrid_checks
 from ugrid_checks.check import check_dataset
 from ugrid_checks.nc_dataset_scan import scan_dataset
@@ -96,6 +97,39 @@ class TestCheck(tests.TestCase):
         self.scan.variables["topology"].attributes["topology_dimension"] = 4
         logs = self._check_dataset(self.scan)
         self._expect_notes(logs, [("R104", "not 0, 1 or 2")])
+
+    def test_nonexistent_mesh(self):
+        self.scan.variables["sample_data"].attributes["mesh"] = np.array(
+            "other_mesh"
+        )
+        logs = self._check_dataset(self.scan)
+        self._expect_notes(
+            logs, [("R502", 'no "other_mesh" variable in the dataset.')]
+        )
+
+    def test_bad_mesh_name(self):
+        self.scan.variables["sample_data"].attributes["mesh"] = np.array(
+            "this that other"
+        )
+        logs = self._check_dataset(self.scan)
+        self._expect_notes(
+            logs,
+            [
+                (
+                    "R502",
+                    "\"mesh='this that other'\", "
+                    "which is not a valid variable name.",
+                )
+            ],
+        )
+
+    def test_empty_mesh_name(self):
+        self.scan.variables["sample_data"].attributes["mesh"] = np.array("")
+        logs = self._check_dataset(self.scan)
+        self._expect_notes(
+            logs,
+            [("R502", "\"mesh=''\", which is not a valid variable name.")],
+        )
 
 
 if __name__ == "__main__":
