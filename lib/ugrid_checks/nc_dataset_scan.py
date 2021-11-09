@@ -83,11 +83,12 @@ def scan_dataset(filepath):
     }
 
     def allattrs(item):
-        # get all attributes as a map, whose valuse are all numpy objects
+        # get all attributes as a map, whose values are all numpy objects
         # NB 'item' can be a variable, or the whole dataset
         # (potentially a Group, but we are not doing that at present)
         return {
-            attr: np.asanyarray(getattr(item, attr)) for attr in item.ncattrs()
+            attr: np.asanyarray(item.getncattr(attr))
+            for attr in item.ncattrs()
         }
 
     vars_summary = {
