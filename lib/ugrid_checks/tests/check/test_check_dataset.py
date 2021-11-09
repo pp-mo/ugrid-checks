@@ -3,28 +3,87 @@ Tests for ugrid_checks.check.check_dataset
 
 """
 import logging
-from pathlib import Path
-import unittest as tests
 
 import numpy as np
-import ugrid_checks
+from pytest import fixture
 from ugrid_checks.check import check_dataset
-from ugrid_checks.nc_dataset_scan import scan_dataset
+from ugrid_checks.tests import cdl_scanner
+
+# Prevent error from 'black' about unused import.
+# NOTE : the import is *not* in fact redundant, since pytest requires it.
+cdl_scanner
 
 
-class TestCheck(tests.TestCase):
-    def setUp(self):
-        # Crude exercise test of code
-        # TODO: replace with abstract generated testdata.
-        filepath = Path(ugrid_checks.__file__).parent  # package dir
-        filepath = filepath.parent.parent  # repo base dir
-        filepath = filepath / "test_data" / "data_C4.nc"
-        self.scan = scan_dataset(filepath)
+@fixture
+def scan_2d_mesh(cdl_scanner):
+    """
+    Return a scan representing a 'typical' testfile with a mesh.
 
+    Being re-created for every test, this can be post-modified to exercise the
+    individual conformance tests.
+    (which is easier than making modified actual files or CDL strings)
+
+    """
+    test_cdl = """
+    netcdf data_C4 {
+    dimensions:
+        dim0 = 6 ;
+        num_node = 8 ;
+        num_vertices = 4 ;
+
+    variables:
+        double sample_data(dim0) ;
+            sample_data:long_name = "sample_data" ;
+            sample_data:coordinates = "latitude longitude" ;
+            sample_data:location = "face" ;
+            sample_data:mesh = "topology" ;
+        double latitude(dim0) ;
+            latitude:units = "degrees_north" ;
+            latitude:standard_name = "latitude" ;
+            latitude:long_name = "latitude of 2D face centres" ;
+            latitude:bounds_long_name = "latitude of 2D mesh nodes." ;
+        double longitude(dim0) ;
+            longitude:units = "degrees_east" ;
+            longitude:standard_name = "longitude" ;
+            longitude:long_name = "longitude of 2D face centres" ;
+            longitude:bounds_long_name = "longitude of 2D mesh nodes." ;
+        double node_lat(num_node) ;
+            node_lat:standard_name = "latitude" ;
+            node_lat:long_name = "latitude of 2D mesh nodes." ;
+            node_lat:units = "degrees_north" ;
+        double node_lon(num_node) ;
+            node_lon:standard_name = "longitude" ;
+            node_lon:long_name = "longitude of 2D mesh nodes." ;
+            node_lon:units = "degrees_east" ;
+        int face_nodes(dim0, num_vertices) ;
+            face_nodes:long_name = "Map every face to its corner nodes." ;
+            face_nodes:cf_role = "face_node_connectivity" ;
+            face_nodes:start_index = 1 ;
+        int topology ;
+            topology:cf_role = "mesh_topology" ;
+            topology:topology_dimension = 2L ;
+            topology:node_coordinates = "node_lat node_lon" ;
+            topology:face_coordinates = "latitude longitude" ;
+            topology:face_node_connectivity = "face_nodes" ;
+            topology:face_dimension = "dim0" ;
+            topology:long_name = "Topology data of 2D unstructured mesh" ;
+
+    // global attributes:
+            :Conventions = "UGRID-1.0" ;
+    }
+    """
+    return cdl_scanner.scan(test_cdl)
+
+
+class TestCheckDataset:
     def _check_dataset(self, scan):
+        # Conformance-check the given scan.
         return check_dataset(scan, print_summary=False, print_results=False)
 
-    def _expect_notes(self, statements, expected_notes):
+    @staticmethod
+    def _expect_notes(statements, expected_notes):
+        # Test that each entry in 'expected' matches one of 'statements',
+        # and that all 'statements' were matched.
         def note_from_logrecord(record):
             statement_code = None
             if record.levelname == "INFO":
@@ -42,7 +101,7 @@ class TestCheck(tests.TestCase):
             if record.levelno >= logging.INFO
         ]
         # Replace each expected item with a matching actual one,
-        # if it can be found.
+        # if one can be found.
         for i_expected, expected_note in enumerate(expected_notes.copy()):
             expected_code, expected_msg = expected_note
             for actual_note in actual_notes:
@@ -53,17 +112,17 @@ class TestCheck(tests.TestCase):
                     expected_notes[i_expected] = actual_note
                     break  # Only ever take first match
         # This should result in a matching list.
-        self.assertEqual(set(expected_notes), set(actual_notes))
+        assert set(expected_notes) == set(actual_notes)
 
-    def test_basic(self):
-        logs = self._check_dataset(self.scan)
+    def test_basic(self, scan_2d_mesh):
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(
             logs, []
-        )  # *NO* recorded statements (nothing wrong !).
+        )  # *NO* recorded statements, as there is nothing wrong !
 
-    def test_mesh_missing_cf_role(self):
-        del self.scan.variables["topology"].attributes["cf_role"]
-        logs = self._check_dataset(self.scan)
+    def test_mesh_missing_cf_role(self, scan_2d_mesh):
+        del scan_2d_mesh.variables["topology"].attributes["cf_role"]
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(
             logs,
             [
@@ -74,9 +133,11 @@ class TestCheck(tests.TestCase):
             ],
         )
 
-    def test_mesh_bad_cf_role(self):
-        self.scan.variables["topology"].attributes["cf_role"] = "something odd"
-        logs = self._check_dataset(self.scan)
+    def test_mesh_bad_cf_role(self, scan_2d_mesh):
+        scan_2d_mesh.variables["topology"].attributes[
+            "cf_role"
+        ] = "something odd"
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(
             logs,
             [
@@ -88,30 +149,30 @@ class TestCheck(tests.TestCase):
             ],
         )
 
-    def test_mesh_no_topology_dimension(self):
-        del self.scan.variables["topology"].attributes["topology_dimension"]
-        logs = self._check_dataset(self.scan)
+    def test_mesh_no_topology_dimension(self, scan_2d_mesh):
+        del scan_2d_mesh.variables["topology"].attributes["topology_dimension"]
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(logs, [("R103", 'no "topology_dimension"')])
 
-    def test_mesh_unknown_topology_dimension(self):
-        self.scan.variables["topology"].attributes["topology_dimension"] = 4
-        logs = self._check_dataset(self.scan)
+    def test_mesh_unknown_topology_dimension(self, scan_2d_mesh):
+        scan_2d_mesh.variables["topology"].attributes["topology_dimension"] = 4
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(logs, [("R104", "not 0, 1 or 2")])
 
-    def test_nonexistent_mesh(self):
-        self.scan.variables["sample_data"].attributes["mesh"] = np.array(
+    def test_nonexistent_mesh(self, scan_2d_mesh):
+        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = np.array(
             "other_mesh"
         )
-        logs = self._check_dataset(self.scan)
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(
             logs, [("R502", 'no "other_mesh" variable in the dataset.')]
         )
 
-    def test_bad_mesh_name(self):
-        self.scan.variables["sample_data"].attributes["mesh"] = np.array(
+    def test_bad_mesh_name(self, scan_2d_mesh):
+        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = np.array(
             "this that other"
         )
-        logs = self._check_dataset(self.scan)
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(
             logs,
             [
@@ -123,14 +184,10 @@ class TestCheck(tests.TestCase):
             ],
         )
 
-    def test_empty_mesh_name(self):
-        self.scan.variables["sample_data"].attributes["mesh"] = np.array("")
-        logs = self._check_dataset(self.scan)
+    def test_empty_mesh_name(self, scan_2d_mesh):
+        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = np.array("")
+        logs = self._check_dataset(scan_2d_mesh)
         self._expect_notes(
             logs,
             [("R502", "\"mesh=''\", which is not a valid variable name.")],
         )
-
-
-if __name__ == "__main__":
-    tests.main()
