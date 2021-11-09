@@ -127,7 +127,7 @@ class TestCheckDataset:
             logs,
             [
                 (
-                    "R102",
+                    "R101",
                     "no \"cf_role\" property, which should be 'mesh_topology'",
                 )
             ],
