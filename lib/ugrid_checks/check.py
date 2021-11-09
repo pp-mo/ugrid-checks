@@ -128,10 +128,12 @@ def check_meshvar(meshname, meshvar, meshvars_by_cf_role, meshvar_referrers):
         )
         if cfrole_prop is None:
             msg += 'no "cf_role" property,'
+            errcode = "R101"
         else:
             msg += f'a "cf_role" of "{cfrole_prop}",'
+            errcode = "R102"
         msg += " which should be 'mesh_topology'."
-        state("R102", "", meshvar, msg)
+        state(errcode, "", meshvar, msg)
         # Also, if the 'cf_role' was something else,
         # check it is a valid option + emit an additional message if needed.
         if cfrole_prop is not None and cfrole_prop not in _VALID_CF_ROLES:
