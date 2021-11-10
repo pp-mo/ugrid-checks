@@ -1,97 +1,11 @@
-import logging
 from pathlib import Path
 from typing import AnyStr, Union
 
+from .logging import LOG
 from .nc_dataset_scan import NcFileSummary, scan_dataset
 from .scan_utils import property_as_single_name, vars_w_props
 
 __all__ = ["check_dataset"]
-
-#
-# Crude message logging, for now
-#
-_N_WARNINGS = 0
-_N_FAILURES = 0
-
-
-class UgridLogHandler(logging.Handler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.reset()
-
-    def emit(self, record):
-        self.logs.append(record)
-
-    def reset(self):
-        self.logs = []
-
-
-_LOG = logging.Logger("ugrid_conformance")
-_HANDLER = UgridLogHandler(level=logging.INFO)
-_LOG.addHandler(_HANDLER)
-_ENABLE_PRINT = True
-
-
-def reset_reports():
-    """Reset the report log."""
-    global _N_WARNINGS, _N_FAILURES
-    _N_WARNINGS = 0
-    _N_FAILURES = 0
-    _HANDLER.reset()
-
-
-def enable_reports_printout(print_statements=True):
-    global _ENABLE_PRINT
-    _ENABLE_PRINT = print_statements
-
-
-def report_statement_logrecords():
-    """Return the report log as a list of :class:`~logging.LogRecords`."""
-    return _HANDLER.logs
-
-
-def report(msg, level=logging.INFO, *args):
-    if _ENABLE_PRINT:
-        print(msg)
-    _LOG.log(level, msg, *args)
-
-
-def _statement(vartype, var, msg):
-    if vartype:
-        result = vartype + f' variable "{var.name}"'
-    else:
-        result = f'Variable "{var.name}"'
-    result += f" {msg}"
-    return result
-
-
-def state(statement: str, vartype, var, msg):
-    global _N_WARNINGS, _N_FAILURES
-    assert len(statement) >= 1
-    statement_type = statement[0]
-    assert statement_type in ("R", "A", "?")
-    try:
-        statement_num = int(statement[1:])
-    except ValueError:
-        statement_num = 0
-    if statement_type == "R":
-        _N_FAILURES += 1
-        msg = f"*** FAIL R{statement_num:03d} : " + _statement(
-            vartype, var, msg
-        )
-        report(msg, logging.ERROR, statement_num)
-    elif statement_type == "A":
-        _N_WARNINGS += 1
-        msg = f"... WARN A{statement_num:03d} : " + _statement(
-            vartype, var, msg
-        )
-        report(msg, logging.WARN, statement_num)
-    elif statement_type == "?":
-        report(_statement(vartype, var, msg))
-
-
-def printonly(msg, *args):
-    report(msg, logging.DEBUG, *args)
 
 
 _VALID_CONNECTIVITY_ROLES = [
@@ -133,7 +47,7 @@ def check_meshvar(meshname, meshvar, meshvars_by_cf_role, meshvar_referrers):
             msg += f'a "cf_role" of "{cfrole_prop}",'
             errcode = "R102"
         msg += " which should be 'mesh_topology'."
-        state(errcode, "", meshvar, msg)
+        LOG.state(errcode, "", meshvar, msg)
         # Also, if the 'cf_role' was something else,
         # check it is a valid option + emit an additional message if needed.
         if cfrole_prop is not None and cfrole_prop not in _VALID_CF_ROLES:
@@ -141,12 +55,12 @@ def check_meshvar(meshname, meshvar, meshvars_by_cf_role, meshvar_referrers):
                 f'has a "cf_role" of "{cfrole_prop}", '
                 "which is not a valid UGRID cf_role."
             )
-            state("?", "Mesh", meshvar, msg)
+            LOG.state("?", "Mesh", meshvar, msg)
 
     # Check all other attributes of mesh vars.
     topology_dimension = meshvar.attributes.get("topology_dimension")
     if topology_dimension is None:
-        state("R103", "Mesh", meshvar, 'has no "topology_dimension".')
+        LOG.state("R103", "Mesh", meshvar, 'has no "topology_dimension".')
     else:
         # Check the topology dimension.
         # In principle, this controls which other connectivity properties may
@@ -154,7 +68,7 @@ def check_meshvar(meshname, meshvar, meshvars_by_cf_role, meshvar_referrers):
         # and then cross-check.
         # TODO
         if topology_dimension not in (0, 1, 2):
-            state(
+            LOG.state(
                 "R104",
                 "Mesh",
                 meshvar,
@@ -179,7 +93,7 @@ def check_dataset_inner(scan):
         meshprop = mrv_var.attributes["mesh"]
         meshvar_name = property_as_single_name(meshprop)
         if not meshvar_name:
-            state(
+            LOG.state(
                 "R502",
                 "Mesh data",
                 mrv_var,
@@ -191,7 +105,7 @@ def check_dataset_inner(scan):
             )
         elif meshvar_name not in all_meshvars:
             if meshvar_name not in vars:
-                state(
+                LOG.state(
                     "R502",
                     "Mesh data",
                     mrv_var,
@@ -222,17 +136,17 @@ def check_dataset_inner(scan):
 
 
 def printout_reports():
-    printonly("")
-    printonly("UGRID conformance checks complete.")
-    if _N_FAILURES + _N_WARNINGS == 0:
-        printonly("No problems found.")
+    LOG.printonly("")
+    LOG.printonly("UGRID conformance checks complete.")
+    if LOG.N_FAILURES + LOG.N_WARNINGS == 0:
+        LOG.printonly("No problems found.")
     else:
-        printonly(
-            f"Total of {_N_WARNINGS + _N_FAILURES} problems found: \n"
-            f"  {_N_FAILURES} Rxxx requirement failures\n"
-            f"  {_N_WARNINGS} Axxx advisory recommendation warnings"
+        LOG.printonly(
+            f"Total of {LOG.N_WARNINGS + LOG.N_FAILURES} problems found: \n"
+            f"  {LOG.N_FAILURES} Rxxx requirement failures\n"
+            f"  {LOG.N_WARNINGS} Axxx advisory recommendation warnings"
         )
-    printonly("Done.")
+    LOG.printonly("Done.")
 
 
 def check_dataset(
@@ -256,9 +170,9 @@ def check_dataset(
         A list of LogRecords representing checker statements.
 
     """
-    reset_reports()
+    LOG.reset()
     # print_results, print_summary = True, True
-    enable_reports_printout(print_results)
+    LOG.enable_reports_printout(print_results)
 
     if isinstance(scan, str):
         scan = Path(scan)
@@ -269,16 +183,16 @@ def check_dataset(
 
     # from .nc_dataset_scan import NcVariableSummary
     # dummyvar = NcVariableSummary('dummyvar', (), (), None, {}, None)
-    # state('?', 'Dummy', dummyvar, 'test warning message')
-    # state('R123', 'Dummy', dummyvar, 'failure')
-    # state('A123', 'Dummy', dummyvar, 'recommendation')
+    # LOG.state('?', 'Dummy', dummyvar, 'test warning message')
+    # LOG.state('R123', 'Dummy', dummyvar, 'failure')
+    # LOG.state('A123', 'Dummy', dummyvar, 'recommendation')
     # report('test non-warning message')
 
     if print_summary:
         printout_reports()
         print("")
         print("Logged reports:")
-        for log_report in _HANDLER.logs:
+        for log_report in LOG.report_statement_logrecords():
             print(f"  {log_report}")
 
-    return report_statement_logrecords()
+    return LOG.report_statement_logrecords()
