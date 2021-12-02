@@ -3,10 +3,12 @@ Tests for ugrid_checks.check.check_dataset
 
 """
 import logging
+import re
 
 import numpy as np
 from pytest import fixture
 from ugrid_checks.check import check_dataset
+from ugrid_checks.nc_dataset_scan import NcVariableSummary
 from ugrid_checks.tests import cdl_scanner
 
 # Prevent error from 'black' about unused import.
@@ -108,7 +110,7 @@ class TestCheckDataset:
                 actual_code, actual_msg = actual_note
                 if (
                     expected_code is None or expected_code == actual_code
-                ) and expected_msg in actual_msg:
+                ) and re.search(expected_msg, actual_msg):
                     expected_notes[i_expected] = actual_note
                     break  # Only ever take first match
         # This should result in a matching list.
@@ -143,9 +145,9 @@ class TestCheckDataset:
             [
                 ("R102", "should be 'mesh_topology'"),
                 (
-                    "",
+                    "",  # N.B. this one doesn't have a code yet
                     "not a valid UGRID cf_role",
-                ),  # N.B. this one doesn't have a code yet
+                ),
             ],
         )
 
@@ -190,4 +192,52 @@ class TestCheckDataset:
         self._expect_notes(
             logs,
             [("R502", "\"mesh=''\", which is not a valid variable name.")],
+        )
+
+    def test_missing_face_dimension(self, scan_2d_mesh):
+        # Swap the dim order of the face_nodes_connectivity
+        conn_var = scan_2d_mesh.variables["face_nodes"]
+        conn_var.dimensions = conn_var.dimensions[::-1]
+
+        # This in itself should be valid + generate no logs.
+        logs = self._check_dataset(scan_2d_mesh)
+        self._expect_notes(logs, [])
+
+        # Now remove the 'node_dimension' attribute
+        del scan_2d_mesh.variables["topology"].attributes["face_dimension"]
+
+        # Unfortunately that doesn't work on it's own, as "the" face dimension
+        # is now *determined* by the dimensions of the face-nodes conn.
+        # So, add an extra (optional) connectivity, with "standard" dim order,
+        # to conflict with the "face_nodes" conn.
+        role = "face_face_connectivity"
+        varname = "face_face"
+        dims = ["dim0", "num_vertices"]
+        shape = [scan_2d_mesh.dimensions[name].length for name in dims]
+        conn_var = NcVariableSummary(
+            name=varname,
+            dimensions=["dim0", "num_vertices"],
+            attributes={"cf_role": np.asanyarray(role)},
+            shape=shape,
+            dtype=np.dtype(np.int64),
+            data=None,
+        )
+        scan_2d_mesh.variables[varname] = conn_var
+        scan_2d_mesh.variables["topology"].attributes[role] = np.asanyarray(
+            varname
+        )
+
+        logs = self._check_dataset(scan_2d_mesh)
+        self._expect_notes(
+            logs,
+            [
+                (
+                    "R118",
+                    (
+                        'no "face_dimension".*'
+                        "with non-standard dim.*"
+                        r': "face_face"\.'
+                    ),
+                ),
+            ],
         )

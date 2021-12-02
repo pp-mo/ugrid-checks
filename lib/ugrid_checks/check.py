@@ -1,27 +1,99 @@
 from pathlib import Path
+import re
 from typing import AnyStr, Union
 
 from .logging import LOG
 from .nc_dataset_scan import NcFileSummary, scan_dataset
-from .scan_utils import property_as_single_name, vars_w_props
+from .scan_utils import (
+    property_as_single_name,
+    property_namelist,
+    vars_w_props,
+)
 
 __all__ = ["check_dataset"]
 
-
 _VALID_CONNECTIVITY_ROLES = [
     "edge_node_connectivity",
-    "face_node_connectivity" "face_edge_connectivity",
+    "face_node_connectivity",
+    "face_edge_connectivity",
     "edge_face_connectivity",
     "face_face_connectivity",
     "boundary_node_connectivity",
 ]
 
 _VALID_CF_ROLES = [
-    "mesh_topology" "location_index_set",
+    "mesh_topology",
+    "location_index_set",
 ] + _VALID_CONNECTIVITY_ROLES
 
+# Valid cf varname regex : copied from iris.common.metadata code.
+_VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z0-9][\w\.\+\-@]*$""")
 
-def check_meshvar(meshname, meshvar, meshvars_by_cf_role, meshvar_referrers):
+
+def check_mesh_attr_is_varlist(full_scan, meshvar, attrname):
+    # Check that a mesh attribute, if it exists, is a valid varlist
+    value = meshvar.attributes.get(attrname)
+    more_todo = value is not None
+    if more_todo:
+        if value.dtype.kind != "U":
+            LOG.state(
+                "R105",
+                "Mesh",
+                meshvar,
+                f"attribute '{attrname}' does not have string type.",
+            )
+            more_todo = False
+    if more_todo:
+        varnames = property_namelist(value)
+        if not varnames:
+            # Empty is *not* a valid content.
+            # N.B. this includes non-string contents.
+            LOG.state(
+                "R105",
+                "Mesh",
+                meshvar,
+                f"attribute '{attrname}' contains \"{value}\", "
+                "which is not a valid list of netcdf variable names.",
+            )
+        for varname in varnames:
+            if not varname:  # skip any extra blanks
+                continue
+            if not _VALID_NAME_REGEX.match(varname):
+                LOG.state(
+                    "R105",
+                    "Mesh",
+                    meshvar,
+                    f"attribute '{attrname}' contains \"{varname}\", "
+                    "which is not a valid netcdf variable name.",
+                )
+            elif varname not in full_scan.variables:
+                LOG.state(
+                    "R106",
+                    "Mesh",
+                    meshvar,
+                    f"attribute '{attrname}' refers to a variable "
+                    f'"{varname}", but there is no such variable '
+                    "in the dataset.",
+                )
+
+
+def check_mesh_coordinate(full_scan, meshvar, attr_name, mesh_dims):
+    value = meshvar.attributes.get(attr_name)
+    more_todo = value is not None
+    if more_todo:
+        pass
+
+
+def check_mesh_connectivity(full_scan, meshvar, attr_name, mesh_dims):
+    value = meshvar.attributes.get(attr_name)
+    more_todo = value is not None
+    if more_todo:
+        pass
+
+
+def check_meshvar(
+    full_scan, meshname, meshvar, meshvars_by_cf_role, meshvar_referrers
+):
     # First check for bad 'cf_role' :
     # if wrong, meshvar can only have been identified by reference.
     if meshname in meshvars_by_cf_role:
@@ -77,14 +149,253 @@ def check_meshvar(meshname, meshvar, meshvars_by_cf_role, meshvar_referrers):
                     "which is not 0, 1 or 2."
                 ),
             )
+            # Handle this subsequently as if it was missing
+            topology_dimension = None
+
+    # Work out what topology-dimension is implied by the available mesh
+    # properties, which we will use *instead* of the declared one in
+    # subsequent tests (and check the declared one against it).
+    highest_connectivity = None
+    appropriate_dim = 0
+    if "face_node_connectivity" in meshvar.attributes:
+        appropriate_dim = 2
+        highest_connectivity = "face_node_connectivity"
+    elif "edge_node_connectivity" in meshvar.attributes:
+        appropriate_dim = 1
+        highest_connectivity = "edge_node_connectivity"
+
+    if topology_dimension is not None:
+        # Emit an error if the attributes present don't match the stated
+        # topology-dimension.  If *no* topology-dimension, skip this : we
+        # already flagged that it was missing, above.
+        if topology_dimension != appropriate_dim:
+            if topology_dimension == 0:
+                if appropriate_dim == 1:
+                    errcode = "R110"  # unexpected edge-node
+                else:
+                    assert appropriate_dim == 2
+                    errcode = "R113"  # unexpected face-node
+            elif topology_dimension == 1:
+                if appropriate_dim == 0:
+                    errcode = "R111"  # missing edge-node
+                else:
+                    assert appropriate_dim == 2
+                    errcode = "R113"  # unexpected face-node
+            else:
+                assert topology_dimension == 2
+                errcode = "R113"  # missing face-node
+            #
+            # TODO: remove R112 -- "may" is not testable !!
+            #
+
+            if topology_dimension < appropriate_dim:
+                # something is extra
+                msg = (
+                    (
+                        f'has "topology_dimension={topology_dimension}", '
+                        f"but the presence of a '{highest_connectivity}' "
+                        f"attribute implies it should be {appropriate_dim}."
+                    ),
+                )
+            else:
+                # something is missing
+                msg = (
+                    (
+                        f'has "topology_dimension={topology_dimension}", '
+                        f"but it has no '{highest_connectivity}' "
+                        f"attribute."
+                    ),
+                )
+            LOG.state(errcode, "Mesh", meshvar, msg)
+
+    # # We will use the 'calculated' one to scope any remaining checks.
+    # topology_dimension = appropriate_dim
+
+    # Check that coordinate and connectivity attributes are valid "varlists"
+    mesh_coord_attr_names = [
+        f"{element}_coordinates" for element in ("face", "edge", "node")
+    ]
+    varlist_names = mesh_coord_attr_names + _VALID_CONNECTIVITY_ROLES
+    for attr in varlist_names:
+        check_mesh_attr_is_varlist(full_scan, meshvar, attr)
+
+    # Work out the actual mesh dimensions.
+    mesh_dims = {name: None for name in ("face", "edge", "node", "boundary")}
+
+    if "node_coordinates" not in meshvar.attributes:
+        LOG.state(
+            "R109",
+            "Mesh",
+            meshvar,
+            "does not have a 'node_coordinates' attribute.",
+        )
+    else:
+        # Note: if a 'node_coordinates' attribute exists, then we already
+        # checked that it is a valid varlist.
+        # So don't re-raise any problems here, just press on.
+        coord_names = property_namelist(meshvar.attributes["node_coordinates"])
+        if coord_names:
+            coord_var = full_scan.variables.get(coord_names[0])
+            if coord_var:
+                # Answer is the first dimension, if any.
+                if len(coord_var.dimensions) > 0:
+                    mesh_dims["node"] = coord_var.dimensions[0]
+
+    def deduce_face_or_edge_dim(location):
+        # Identify the dim, and check the consistency of relevant attributes.
+        # If found, set it in 'mesh_dims'
+        dimattr_name = f"{location}_dimension"
+        connattr_name = f"{location}_node_connectivity"
+        dimension_name = property_as_single_name(
+            meshvar.attributes.get(dimattr_name)
+        )
+        if location == "boundary":
+            # No 'boundary_dimension' attribute is supported.
+            if dimension_name:
+                dimension_name = None
+                LOG.state(
+                    "?",
+                    "Mesh",
+                    meshvar,
+                    (
+                        'has an attribute "boundary_dimension", which is not '
+                        'a valid UGRID term, and may be a mistake (ADVISORY)."'
+                    ),
+                )
+                # TODO: add ADVISE code for this ?
+        if dimension_name:
+            # There is an explicit 'xxx_dimension' property.
+            if connattr_name not in meshvar.attributes:
+                LOG.state(
+                    "?",
+                    "Mesh",
+                    meshvar,
+                    f'has an attribute "{dimattr_name}", which is not valid '
+                    f'since there is no "{connattr_name}".',
+                )
+            elif dimension_name in full_scan.dimensions:
+                mesh_dims[location] = dimension_name
+            else:
+                errcode = {
+                    "edge": "R115",
+                    "face": "R117",
+                }[location]
+                LOG.state(
+                    errcode,
+                    "Mesh",
+                    meshvar,
+                    f'has {dimattr_name}="{dimension_name}", which is not'
+                    "a dimension in the dataset.",
+                )
+        elif connattr_name in meshvar.attributes:
+            # No "xxx_dimension" attribute, but we *do* have
+            # "xxx_node_connectivity", so the mesh does _have_ this location.
+            connvar_name = property_as_single_name(
+                meshvar.attributes[connattr_name]
+            )
+            conn_var = full_scan.variables.get(connvar_name)
+            if conn_var:
+                # Answer is the first dimension, if any.
+                if len(conn_var.dimensions) > 0:
+                    mesh_dims[location] = conn_var.dimensions[0]
+
+    deduce_face_or_edge_dim("edge")
+    deduce_face_or_edge_dim("face")
+
+    # Check that, if any connectivities have non-standard dim order, then a
+    # dimension attribute exists.
+    def var_has_nonfirst_dim(varname, dimname):
+        conn_var = full_scan.variables.get(varname)
+        result = conn_var is not None
+        if result:
+            result = dimname in conn_var.dimensions
+        if result:
+            result = conn_var.dimensions[0] != dimname
+        return result
+
+    location_altordered_conns = {}
+    for attr in _VALID_CONNECTIVITY_ROLES:
+        maindim_location = attr.split("_")[0]
+        assert maindim_location != "node"  # no such connectivities
+        maindim_name = mesh_dims[maindim_location]
+        for conn_name in property_namelist(meshvar.attributes.get(attr)):
+            if var_has_nonfirst_dim(conn_name, maindim_name):
+                # We found a connectivity with a nonstandard dim order
+                dim_attr = f"{maindim_location}_dimension"
+                if dim_attr not in meshvar.attributes:
+                    # There is no corresponding 'xxx_dimension', so warn.
+                    conns = location_altordered_conns.get(
+                        maindim_location, set()
+                    )
+                    conns.add(conn_name)
+                    location_altordered_conns[maindim_location] = conns
+
+    for location, conns in location_altordered_conns.items():
+        # We found connectivities with a nonstandard dim order for this dim.
+        assert location in ("face", "edge")
+        errcode = {"edge": "R116", "face": "R118"}[location]
+        conn_names = [f'"{name}"' for name in conns]
+        conn_names_str = ", ".join(conn_names)
+        msg = (
+            f'has no "{dim_attr}" attribute, but there are '
+            f"{location} connectivities "
+            f"with non-standard dimension order : {conn_names_str}."
+        )
+        LOG.state(errcode, "Mesh", meshvar, msg)
+
+    # Check that all existing coordinates are valid.
+    for attr in mesh_coord_attr_names:
+        check_mesh_coordinate(full_scan, meshvar, attr, mesh_dims)
+
+    # Check that all existing connectivities are valid.
+    for attr in _VALID_CONNECTIVITY_ROLES:
+        check_mesh_connectivity(full_scan, meshvar, attr, mesh_dims)
+
+    # deal with the optional elements (connectivities)
+    def check_requires(errcode, attrname, location_1, location_2=None):
+        exist = attrname in meshvar.attributes
+        if exist:
+            elems = [location_1]
+            if location_2:
+                elems.append(location_2)
+            required_elements = [f"{name}_node_connectivity" for name in elems]
+            missing_elements = [
+                f'"{name}"'
+                for name in required_elements
+                if name not in meshvar.attributes
+            ]
+            if missing_elements:
+                err_msg = (
+                    f'has a "{attrname}" attribute, which is not valid '
+                    f"since there is no "
+                )
+                err_msg += "or ".join(missing_elements)
+                err_msg += " attribute present."
+                LOG.state(errcode, "Mesh", meshvar, err_msg)
+
+    check_requires("R114", "boundary_node_connectivity", "face")
+    check_requires("R119", "face_face_connectivity", "face")
+    check_requires("R120", "face_edge_connectivity", "face", "edge")
+    check_requires("R121", "edge_face_connectivity", "face", "edge")
+
+    # Advisory checks.
+    if meshvar.dimensions:
+        LOG.state("A101", "Mesh", meshvar, "has dimensions.")
+    if "standard_name" in meshvar.attributes:
+        LOG.state("A102", "Mesh", meshvar, 'has a "standard_name" attribute.')
+    if "units" in meshvar.attributes:
+        LOG.state("A103", "Mesh", meshvar, 'has a "units" attribute.')
+    # NOTE: "A104" relates to multiple meshvars, so is handled in caller.
+
+    return mesh_dims
 
 
 def check_dataset_inner(scan):
     #
     # Phase#1 : identify mesh data variables
     #
-    vars = scan.variables
-    meshdata_vars = vars_w_props(vars, mesh="*")
+    all_vars = scan.variables
+    meshdata_vars = vars_w_props(all_vars, mesh="*")
 
     # Check that all vars with a 'mesh' properties name valid variables.
     all_meshvars = {}
@@ -104,7 +415,7 @@ def check_dataset_inner(scan):
                 ),
             )
         elif meshvar_name not in all_meshvars:
-            if meshvar_name not in vars:
+            if meshvar_name not in all_vars:
                 LOG.state(
                     "R502",
                     "Mesh data",
@@ -117,22 +428,48 @@ def check_dataset_inner(scan):
                 )
             else:
                 # Include this one in those we check as mesh-vars.
-                all_meshvars[meshvar_name] = vars[meshvar_name]
+                all_meshvars[meshvar_name] = all_vars[meshvar_name]
                 meshvar_referrers[meshvar_name] = mrv_name
 
     #
     # Phase#2 : check all mesh variables
     #
-    vars = scan.variables
     # Add all vars with 'cf_role="mesh_topology"' to the all-meshvars dict
-    meshvars_by_cf_role = vars_w_props(vars, cf_role="mesh_topology")
+    meshvars_by_cf_role = vars_w_props(all_vars, cf_role="mesh_topology")
     all_meshvars.update(meshvars_by_cf_role)
 
     # Check all putative mesh vars.
+    mesh_dims = {}
     for meshname, meshvar in all_meshvars.items():
-        check_meshvar(
-            meshname, meshvar, meshvars_by_cf_role, meshvar_referrers
+        dims_dict = check_meshvar(
+            scan, meshname, meshvar, meshvars_by_cf_role, meshvar_referrers
         )
+        # (NB names should be var_names of the vars, so all different)
+        assert meshname not in mesh_dims
+        mesh_dims[meshname] = dims_dict
+
+    # Check for shared dimensions, which is an advisory warning.
+    dim_meshes = {}
+    for mesh, location_dims in mesh_dims.items():
+        for location, dim in location_dims.items():
+            meshnames = dim_meshes.get(dim, set())
+            meshnames.add(mesh)
+
+    for dim, meshnames in dim_meshes.items():
+        if len(meshnames) > 1:
+            meshnames = sorted(meshnames)
+            one_mesh, other_meshes = meshnames[0], meshnames[1:]
+            if len(other_meshes) == 1:
+                other_mesh = other_meshes[0]
+                msg = (
+                    f'Dimension "{dim}" is mapped by both '
+                    f'mesh "{one_mesh}" and mesh "{other_mesh}".'
+                )
+            else:
+                msg = f'Dimension "{dim}" is mapped by multiple meshes : '
+                msg += ", ".join(f'"{mesh}"' for mesh in other_meshes[:-1])
+                msg += f'and "{other_meshes[-1]}".'
+            LOG.state("A104", "Mesh", meshvar, msg)
 
 
 def printout_reports():
