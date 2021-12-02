@@ -1,27 +1,36 @@
 """
-Utility routines for handling netcdf file information from :class:`ugrid_checks.nc_dataset_scan.NcFileSummary` s.
+Utility routines for handling netcdf file information stored in a
+:class:`ugrid_checks.nc_dataset_scan.NcFileSummary`.
+
 """
 
 
 def property_namelist(np_property_value):
-    # extract a list of names from a numpy string property.
-    assert np_property_value.dtype.kind == "U"
-    return str(np_property_value).split()
+    # Return a list of names from a numpy string property value.
+    # Treat a None value as an empty string.
+    result = []
+    if np_property_value is not None:
+        if np_property_value.dtype.kind == "U":
+            # Don't handle non-string values.  Simply return empty.
+            result = str(np_property_value).split()
+    return result
 
 
 def property_as_single_name(np_property_value):
-    nameslist = property_namelist(np_property_value)
-    if len(nameslist) == 1:
-        result = nameslist[0]
-    else:
-        result = None
+    # Return the single name in a property value.
+    # If there is not exactly one name, return None.
+    result = None
+    if np_property_value is not None:
+        nameslist = property_namelist(np_property_value)
+        if len(nameslist) == 1:
+            result = nameslist[0]
     return result
 
 
 def vars_w_props(varsdict, **kwargs):
     """
-    Extract vars from a dataset scan  dict, {name:props}, returning only those where each
-    <attribute>=<value>, defined by the given keywords.
+    Extract vars from a dataset scan  dict, {name:props}, returning only those
+    where each <attribute>=<value>, defined by the given keywords.
     Except that '<key>="*"' means that '<key>' merely _exists_, with any value.
 
     Kwargs:
@@ -62,7 +71,8 @@ def vars_w_props(varsdict, **kwargs):
 #
 #
 # def vars_w_dims(varsdict, dim_names):
-#     """Subset a vars dict, returning those which map all the specified dims."""
+#     """Subset a vars dict, returning those which map all the
+#     specified dims."""
 #     result = {
 #         name: var
 #         for name, var in varsdict.items()
