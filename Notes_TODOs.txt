@@ -1,0 +1,20 @@
+Some inconsistencies now identified between this and <ugrid-conventions>/src/conformance.md
+
+line numbers in "checks.py" ...
+
+::114
+    "not a vaild UGRID cf_role"
+        -- see also "test_mesh_bad_cf_role"
+
+:: 235
+  "has an attribute "boundary_dimension""
+  -- needs an advisory (general)
+
+::175
+  R112 is not testable -- remove
+
+Add an advisory that different dims are used for different locations.
+ - in conjunction with "not share between meshes", this should be handy
+     == each location of each mesh has its _own_ unique dimension
+ - TODO: checks.py code support
+

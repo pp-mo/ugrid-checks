@@ -78,6 +78,14 @@ def scan_2d_mesh(cdl_scanner):
 
 
 class TestCheckDataset:
+    #
+    # Tests for the main "ugrid_checks.check_dataset" call.
+    #
+    # TODO: at present these tests mostly target "check_dataset_inner", while
+    #   *not* actually testing the wrapper functions of "check_dataset".
+    #   Actually, most really target "check_meshvar", so we should separate
+    #   that all out, too.
+    #
     def _check_dataset(self, scan):
         # Conformance-check the given scan.
         return check_dataset(scan, print_summary=False, print_results=False)
