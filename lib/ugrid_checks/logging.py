@@ -21,7 +21,7 @@ class CheckLoggingInterface:
     Purpose-specific interface for logging ugrid conformance check messages.
 
     Contains a regular :class:`~logging.Handler` and a
-    :class:`UgridLogHandler` which is connectedd to it.
+    :class:`UgridLogHandler` which is connected to it.
 
     """
 
