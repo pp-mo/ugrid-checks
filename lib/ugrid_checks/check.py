@@ -1,6 +1,7 @@
+from logging import LogRecord
 from pathlib import Path
 import re
-from typing import AnyStr, Dict, Union
+from typing import AnyStr, Dict, List, Union
 
 from .logging import LOG
 from .nc_dataset_scan import NcFileSummary, NcVariableSummary, scan_dataset
@@ -522,34 +523,43 @@ def printout_reports():
 
 
 def check_dataset(
-    file_scan: Union[NcFileSummary, AnyStr, Path],
-    print_summary=True,
-    print_results=True,
-):
+    file: Union[NcFileSummary, AnyStr, Path],
+    print_results: bool = True,
+    print_summary: bool = True,
+) -> List[LogRecord]:
     """
-    Run UGRID conformance checks on file content.
+    Run UGRID conformance checks on a file.
 
-    Log statements regarding problems found to the :data:`_LOG` logger.
-    The built-in logger prints the statements, and records them
+    Log statements regarding any problems found to the :data:`_LOG` logger.
+    Return the accumulated log records of problems found.
+    Optionally print logger messages and/or a summary of results.
 
-    Args:
-    * file_scan:
-        Item to scan : an :class:`NcFileSummary`,
-        or a string or filepath object.
+    Parameters
+    ----------
+    file
+        input file scan, Path or path-string
+    print_results
+        whether to print warnings as they are logged
+    print_summary
+        whether to print a full summary at the end
 
-    Return:
-    * logs
-        A list of LogRecords representing checker statements.
-
+    Returns
+    -------
+    checker_warnings
+            A list of log records, recording problems identified.
     """
     LOG.reset()
     # print_results, print_summary = True, True
     LOG.enable_reports_printout(print_results)
 
-    if isinstance(file_scan, str):
-        file_scan = Path(file_scan)
-    if isinstance(file_scan, Path):
-        file_scan = scan_dataset(file_scan)
+    if isinstance(file, str):
+        file_path = Path(file)
+    elif isinstance(file, Path):
+        file_path = file
+    if isinstance(file, NcFileSummary):
+        file_scan = file
+    else:
+        file_scan = scan_dataset(file_path)
 
     check_dataset_inner(file_scan)
 

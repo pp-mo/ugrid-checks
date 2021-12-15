@@ -1,5 +1,6 @@
 """Slightly crude, but ugrid-check-specific logging."""
 import logging
+from typing import List
 
 
 class UgridLogHandler(logging.Handler):
@@ -49,7 +50,7 @@ class CheckLoggingInterface:
         """Enable/disable printing of logged messages."""
         self._ENABLE_PRINT = print_statements
 
-    def report_statement_logrecords(self):
+    def report_statement_logrecords(self) -> List[logging.LogRecord]:
         """Return the report log as a list of :class:`~logging.LogRecords`."""
         return self._handler.logs
 
