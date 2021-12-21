@@ -28,68 +28,75 @@ _VALID_CF_ROLES = [
 ] + _VALID_CONNECTIVITY_ROLES
 
 # Valid cf varname regex : copied from iris.common.metadata code.
-_VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z0-9][\w\.\+\-@]*$""")
+_VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z][a-zA-Z0-9]*[\w\.\+\-@]*$""")
 
 
 def check_mesh_attr_is_varlist(
-    file_scan: NcFileSummary, meshvar: NcVariableSummary, attrname: AnyStr
+    file_scan: NcFileSummary, meshvar: NcVariableSummary, attrname: str
 ):
     """
     Check that a mesh-var attribute, if it exists, is a valid varlist.
 
     Parameters
     ----------
-    file_scan
+    file_scan : :class:`NcFileSummary`
         file containing the mesh-var
-    meshvar
+    meshvar : class:`NcVariableSummary`
         mesh variable
-    attrname
+    attrname : str
         name of the attribute of 'meshvar' to check
 
     """
     value = meshvar.attributes.get(attrname)
-    more_todo = value is not None
-    if more_todo:
-        if value.dtype.kind != "U":
+    if value is None:
+        # Missing is ok.  But NB *not* an empty string (see below).
+        success = True
+    else:
+        success = value.dtype.kind == "U"
+        if not success:
             LOG.state(
                 "R105",
                 "Mesh",
                 meshvar,
                 f"attribute '{attrname}' does not have string type.",
             )
-            more_todo = False
-    if more_todo:
-        varnames = property_namelist(value)
-        if not varnames:
-            # Empty is *not* a valid content.
-            # N.B. this includes non-string contents.
-            LOG.state(
-                "R105",
-                "Mesh",
-                meshvar,
-                f"attribute '{attrname}' contains \"{value}\", "
-                "which is not a valid list of netcdf variable names.",
-            )
-        for varname in varnames:
-            if not varname:  # skip any extra blanks
-                continue
-            if not _VALID_NAME_REGEX.match(varname):
+        if success:
+            varnames = property_namelist(value)
+            if not varnames:
+                # Empty is *not* a valid content.
+                # N.B. this includes non-string contents.
                 LOG.state(
                     "R105",
                     "Mesh",
                     meshvar,
-                    f"attribute '{attrname}' contains \"{varname}\", "
-                    "which is not a valid netcdf variable name.",
+                    f"attribute '{attrname}' = \"{value}\", "
+                    "which is not a valid list of netcdf variable names.",
                 )
-            elif varname not in file_scan.variables:
-                LOG.state(
-                    "R106",
-                    "Mesh",
-                    meshvar,
-                    f"attribute '{attrname}' refers to a variable "
-                    f'"{varname}", but there is no such variable '
-                    "in the dataset.",
-                )
+                success = False
+        if success:
+            for varname in varnames:
+                if not varname:  # skip any extra blanks
+                    continue
+                if not _VALID_NAME_REGEX.match(varname):
+                    LOG.state(
+                        "R105",
+                        "Mesh",
+                        meshvar,
+                        f"attribute '{attrname}' = \"{varname}\", "
+                        "which is not a valid netcdf variable name.",
+                    )
+                    success = False
+                elif varname not in file_scan.variables:
+                    LOG.state(
+                        "R106",
+                        "Mesh",
+                        meshvar,
+                        f"attribute '{attrname}' refers to a variable "
+                        f'"{varname}", but there is no such variable '
+                        "in the dataset.",
+                    )
+                    success = False
+    return success
 
 
 def check_mesh_coordinate(file_scan, meshvar, attr_name, mesh_dims):
@@ -111,26 +118,27 @@ def check_mesh_connectivity(file_scan, meshvar, attr_name, mesh_dims):
 def check_meshvar(
     meshvar: NcVariableSummary,
     file_scan: NcFileSummary,
-    name_of_a_referring_var: AnyStr = None,
-) -> Dict[AnyStr, AnyStr]:
+    name_of_a_referring_var: Union[str, None] = None,
+) -> Dict[str, str]:
     """
     Run checks on a mesh variable.
 
     Parameters
     ----------
-    meshvar
+    meshvar : :class:`NcVariableSummary`
         meshvar to check
-    file_scan
+    file_scan : :class:`NcFileSummary`
         a scan of the entire file that this meshvar exists in
-    name_of_a_referring_var
+    name_of_a_referring_var : str or None, default = None
         a variable which names *this* var in its 'mesh' property,
         if there are any.
 
     Returns
     -------
-    mesh_dims
-        A dictionary mapping each mesh location to the relevant location
-        dimension in this mesh, if any.
+    mesh_dims : Dict[str, str]
+        A dictionary mapping each mesh location to the name of the relevant
+        location dimension in this mesh, if any.
+        Unused locations are present with value None.
 
     """
     # First check for bad 'cf_role' :
@@ -161,6 +169,7 @@ def check_meshvar(
                 f'has a "cf_role" of "{cfrole_prop}", '
                 "which is not a valid UGRID cf_role."
             )
+            # "R102.a"
             LOG.state("?", "Mesh", meshvar, msg)
 
     # Check all other attributes of mesh vars.
@@ -224,20 +233,21 @@ def check_meshvar(
             if topology_dimension < appropriate_dim:
                 # something is extra
                 msg = (
-                    (
-                        f'has "topology_dimension={topology_dimension}", '
-                        f"but the presence of a '{highest_connectivity}' "
-                        f"attribute implies it should be {appropriate_dim}."
-                    ),
+                    f'has "topology_dimension={topology_dimension}", '
+                    f"but the presence of a '{highest_connectivity}' "
+                    f"attribute implies it should be {appropriate_dim}."
                 )
             else:
                 # something is missing
+                toplogy_required_attribute = {
+                    0: "face_node",
+                    1: "edge_node_connectivity",
+                    2: "face_node_connectivity",
+                }[int(topology_dimension)]
                 msg = (
-                    (
-                        f'has "topology_dimension={topology_dimension}", '
-                        f"but it has no '{highest_connectivity}' "
-                        f"attribute."
-                    ),
+                    f'has "topology_dimension={topology_dimension}", '
+                    f"but it has no '{toplogy_required_attribute}' "
+                    f"attribute."
                 )
             LOG.state(errcode, "Mesh", meshvar, msg)
 
@@ -251,7 +261,19 @@ def check_meshvar(
     ]
     varlist_names = mesh_coord_attr_names + _VALID_CONNECTIVITY_ROLES
     for attr in varlist_names:
-        check_mesh_attr_is_varlist(file_scan, meshvar, attr)
+        ok = check_mesh_attr_is_varlist(file_scan, meshvar, attr)
+        if not ok:
+            value = meshvar.attributes.get(attr, "")
+            is_conn = attr in _VALID_CONNECTIVITY_ROLES
+            LOG.state(
+                "R108" if is_conn else "R107",
+                "Mesh",
+                meshvar,
+                (
+                    f'attribute "{attr}" = "{value}", which is not a list of '
+                    "variables in the dataset."
+                ),
+            )
 
     # Work out the actual mesh dimensions.
     mesh_dims = {name: None for name in ("face", "edge", "node", "boundary")}
@@ -287,6 +309,7 @@ def check_meshvar(
             # No 'boundary_dimension' attribute is supported.
             if dimension_name:
                 dimension_name = None
+                # "A105 ?"
                 LOG.state(
                     "?",
                     "Mesh",
@@ -300,6 +323,7 @@ def check_meshvar(
         if dimension_name:
             # There is an explicit 'xxx_dimension' property.
             if connattr_name not in meshvar.attributes:
+                # "A106 ?"
                 LOG.state(
                     "?",
                     "Mesh",
@@ -318,7 +342,7 @@ def check_meshvar(
                     errcode,
                     "Mesh",
                     meshvar,
-                    f'has {dimattr_name}="{dimension_name}", which is not'
+                    f'has {dimattr_name}="{dimension_name}", which is not '
                     "a dimension in the dataset.",
                 )
         elif connattr_name in meshvar.attributes:
@@ -424,7 +448,20 @@ def check_meshvar(
     return mesh_dims
 
 
-def check_dataset_inner(file_scan):
+def check_dataset_inner(file_scan: NcFileSummary):
+    """
+    Run UGRID conformance checks on a representation of a file.
+
+    This low-level routine operates on an abstract "file-scan" representation
+    rather than a real file.
+    All checking messsages are recorded with :meth:`LOG.state`.
+
+    Parameters
+    ----------
+    file_scan : :class:`NcFileSummary`
+        representation of a netcdf file to check
+
+    """
     #
     # Phase#1 : identify mesh data variables
     #
@@ -455,9 +492,8 @@ def check_dataset_inner(file_scan):
                     "Mesh data",
                     mrv_var,
                     (
-                        f"variable {mrv_name} has attribute "
-                        "\"mesh='{meshvar_name}'\", but there is no "
-                        f'"{meshvar_name}" variable in the dataset.'
+                        f"has attribute \"mesh='{meshvar_name}'\", but there "
+                        f'is no "{meshvar_name}" variable in the dataset.'
                     ),
                 )
             else:
@@ -484,7 +520,7 @@ def check_dataset_inner(file_scan):
         assert meshname not in mesh_dims
         mesh_dims[meshname] = dims_dict
 
-    # Check for shared dimensions, which is an advisory warning.
+    # Check for dimensions shared between meshes, which is an advisory warning.
     dim_meshes = {}
     for mesh, location_dims in mesh_dims.items():
         for location, dim in location_dims.items():
@@ -536,17 +572,17 @@ def check_dataset(
 
     Parameters
     ----------
-    file
-        input file scan, Path or path-string
-    print_results
+    file : filepath string, Path or :class:`NcFileSummary`
+        path to, or representation of a netcdf input file
+    print_results : bool, default=True
         whether to print warnings as they are logged
-    print_summary
-        whether to print a full summary at the end
+    print_summary : bool, default=True
+        whether to print a results summary at the end
 
     Returns
     -------
-    checker_warnings
-            A list of log records, recording problems identified.
+    checker_warnings : list of :class:LogRecord
+            A list of logged message records, one for each problem identified.
     """
     LOG.reset()
     # print_results, print_summary = True, True
