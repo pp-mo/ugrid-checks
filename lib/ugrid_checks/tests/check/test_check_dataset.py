@@ -9,7 +9,7 @@ import numpy as np
 from numpy import array
 from pytest import fixture
 from ugrid_checks.check import check_dataset
-from ugrid_checks.nc_dataset_scan import NcVariableSummary
+from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
 from ugrid_checks.tests import cdl_scanner
 
 # Prevent error from 'black' about unused import.
@@ -299,43 +299,6 @@ class TestCheckDataset:
         msg = "mesh='absent'.*but there is no \"absent\" variable"
         self._expect_1(logs, "R502", msg)
 
-    def test_r118_mesh_missing_face_dimension(self, scan_2d_mesh):
-        # Swap the dim order of the face_nodes_connectivity
-        conn_var = scan_2d_mesh.variables["face_nodes"]
-        conn_var.dimensions = conn_var.dimensions[::-1]
-
-        # This in itself should be valid + generate no logs.
-        logs = self._check_dataset(scan_2d_mesh)
-        self._expect_notes(logs, [])
-
-        # Now remove the 'node_dimension' attribute
-        del scan_2d_mesh.variables["topology"].attributes["face_dimension"]
-
-        # Unfortunately that doesn't work on it's own, as "the" face dimension
-        # is now *determined* by the dimensions of the face-nodes conn.
-        # So, add an extra (optional) connectivity, with "standard" dim order,
-        # to conflict with the "face_nodes" conn.
-        role = "face_face_connectivity"
-        varname = "face_face"
-        dims = ["face_dim", "num_vertices"]
-        shape = [scan_2d_mesh.dimensions[name].length for name in dims]
-        conn_var = NcVariableSummary(
-            name=varname,
-            dimensions=["face_dim", "num_vertices"],
-            attributes={"cf_role": np.asanyarray(role)},
-            shape=shape,
-            dtype=np.dtype(np.int64),
-            data=None,
-        )
-        scan_2d_mesh.variables[varname] = conn_var
-        scan_2d_mesh.variables["topology"].attributes[role] = np.asanyarray(
-            varname
-        )
-
-        logs = self._check_dataset(scan_2d_mesh)
-        msg = r'no "face_dimension".*with non-standard dim.*: "face_face"\.'
-        self._expect_1(logs, "R118", msg)
-
     def test_r105_r107_mesh_badcoordattr_nodecoords_nonstring(
         self, scan_2d_mesh
     ):
@@ -516,3 +479,159 @@ class TestCheckDataset:
         logs = self._check_dataset(scan_1d_mesh)
         msg = 'edge_dimension="unknown_dim".* not a dimension'
         self._expect_1(logs, "R115", msg)
+
+    def test_r117_mesh_facedim_unknown(self, scan_2d_mesh):
+        meshvar = scan_2d_mesh.variables["topology"]
+        meshvar.attributes["face_dimension"] = array("unknown_dim")
+        logs = self._check_dataset(scan_2d_mesh)
+        msg = 'face_dimension="unknown_dim".* not a dimension'
+        self._expect_1(logs, "R117", msg)
+
+    def test_r116_mesh_missing_needed_edgedim(self, scan_2d_mesh):
+        # Check that, if some edge connectivities have a non-standard dim
+        # order, we then require an edge-dim attribute.
+
+        # First add edges and a face-edges map to the 2d mesh
+        # (because there are no optional edge connectivities in a 1d mesh)
+        scan_2d_mesh.dimensions["edge_dim"] = NcDimSummary(3, False)
+        scan_2d_mesh.dimensions["n_edge_ends"] = NcDimSummary(2, False)
+        edgenodes_name = "edge_nodes_var"
+        edgenodes_conn = NcVariableSummary(
+            name=edgenodes_name,
+            dimensions=["edge_dim", "n_edge_ends"],
+            shape=(3, 2),
+            dtype=np.int64,
+            data=None,
+            attributes={},
+        )
+        # Now add the (optional) edge-face connectivity.
+        edgeface_name = "edge_faces_var"
+        edgeface_conn = NcVariableSummary(
+            name=edgeface_name,
+            dimensions=["edge_dim", "num_vertices"],
+            shape=(6, 4),
+            dtype=np.int64,
+            data=None,
+            attributes={},
+        )
+        scan_2d_mesh.variables[edgenodes_name] = edgenodes_conn
+        scan_2d_mesh.variables[edgeface_name] = edgeface_conn
+        meshvar = scan_2d_mesh.variables["topology"]
+        meshvar.attributes["edge_node_connectivity"] = array(edgenodes_name)
+        meshvar.attributes["edge_face_connectivity"] = array(edgeface_name)
+
+        # Check this is still ok, with no edge-dim attribute.
+        assert "mesh_dimension" not in meshvar.attributes
+        logs = self._check_dataset(scan_2d_mesh)
+        self._expect_notes(logs, [])
+
+        # Now swap the dim-order of the 'edge_faces' variable.
+        edgeface_conn.dimensions = edgeface_conn.dimensions[::-1]
+        # That should trigger the error
+        logs = self._check_dataset(scan_2d_mesh)
+        msg = (
+            r'has no "edge_dimension" attribute.*'
+            "edge connectivities with non-standard dimension order : "
+            f'"{edgeface_name}"'
+        )
+        self._expect_1(logs, "R116", msg)
+
+        # Reinstating the 'edge_dimension' attribute should make it OK again.
+        meshvar.attributes["edge_dimension"] = array("edge_dim")
+        logs = self._check_dataset(scan_2d_mesh)
+        self._expect_notes(logs, [])
+
+    def test_r118_mesh_missing_needed_facedim_2(self, scan_2d_mesh):
+        # Check that, if some edge connectivities have a non-standard dim
+        # order, we then require an edge-dim attribute.
+
+        # Add a face-face map to the 2d mesh
+        faceface_name = "face_face_var"
+        faceface_conn = NcVariableSummary(
+            name=faceface_name,
+            dimensions=["face_dim", "n_vertices"],
+            shape=(6, 4),
+            dtype=np.int64,
+            data=None,
+            attributes={},
+        )
+        scan_2d_mesh.variables[faceface_name] = faceface_conn
+        meshvar = scan_2d_mesh.variables["topology"]
+        meshvar.attributes["face_face_connectivity"] = array(faceface_name)
+
+        # Remove the face-dim attribute
+        del meshvar.attributes["face_dimension"]
+        # Check that this it is still OK, with no checking errors
+        logs = self._check_dataset(scan_2d_mesh)
+        self._expect_notes(logs, [])
+
+        # Now swap the dim-order of the 'face_edges' variable.
+        faceface_conn.dimensions = faceface_conn.dimensions[::-1]
+        # That should trigger the error
+        logs = self._check_dataset(scan_2d_mesh)
+        msg = (
+            r'has no "face_dimension" attribute.*'
+            "face connectivities with non-standard dimension order : "
+            f'"{faceface_name}"'
+        )
+        self._expect_1(logs, "R118", msg)
+
+        # Reinstating the 'face_dimension' attribute should make it OK again.
+        meshvar.attributes["face_dimension"] = array("face_dim")
+        logs = self._check_dataset(scan_2d_mesh)
+        self._expect_notes(logs, [])
+
+    def test_r119_mesh_faceface_no_faces(self, scan_1d_mesh):
+        meshvar = scan_1d_mesh.variables["topology"]
+        # This isn't a suitable target, but avoids a 'no such variable' error.
+        meshvar.attributes["face_face_connectivity"] = array("node_lat")
+        logs = self._check_dataset(scan_1d_mesh)
+        msg = (
+            'has a "face_face_connectivity".*'
+            'there is no "face_node_connectivity"'
+        )
+        self._expect_1(logs, "R119", msg)
+
+    def test_r120_mesh_faceedge_no_faces(self, scan_1d_mesh):
+        meshvar = scan_1d_mesh.variables["topology"]
+        # This isn't a suitable target, but avoids a 'no such variable' error.
+        meshvar.attributes["face_edge_connectivity"] = array("node_lat")
+        logs = self._check_dataset(scan_1d_mesh)
+        msg = (
+            'has a "face_edge_connectivity".*'
+            'there is no "face_node_connectivity"'
+        )
+        self._expect_1(logs, "R120", msg)
+
+    def test_r120_mesh_faceedge_no_edges(self, scan_2d_mesh):
+        meshvar = scan_2d_mesh.variables["topology"]
+        # This isn't a suitable target, but avoids a 'no such variable' error.
+        meshvar.attributes["face_edge_connectivity"] = array("node_lat")
+        logs = self._check_dataset(scan_2d_mesh)
+        msg = (
+            'has a "face_edge_connectivity".*'
+            'there is no "edge_node_connectivity"'
+        )
+        self._expect_1(logs, "R120", msg)
+
+    def test_r121_mesh_edgeface_no_faces(self, scan_1d_mesh):
+        meshvar = scan_1d_mesh.variables["topology"]
+        # This isn't a suitable target, but avoids a 'no such variable' error.
+        meshvar.attributes["edge_face_connectivity"] = array("node_lat")
+        logs = self._check_dataset(scan_1d_mesh)
+        msg = (
+            'has a "edge_face_connectivity".*'
+            'there is no "face_node_connectivity"'
+        )
+        self._expect_1(logs, "R121", msg)
+
+    def test_r121_mesh_edgeface_no_edges(self, scan_2d_mesh):
+        meshvar = scan_2d_mesh.variables["topology"]
+        # This isn't a suitable target, but avoids a 'no such variable' error.
+        meshvar.attributes["edge_face_connectivity"] = array("node_lat")
+        logs = self._check_dataset(scan_2d_mesh)
+        msg = (
+            'has a "edge_face_connectivity".*'
+            'there is no "edge_node_connectivity"'
+        )
+        self._expect_1(logs, "R121", msg)
