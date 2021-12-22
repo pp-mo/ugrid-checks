@@ -68,10 +68,12 @@ class CheckLoggingInterface:
     @staticmethod
     def _statement(vartype, var, msg):
         if vartype:
-            result = vartype + f' variable "{var.name}"'
+            result = vartype + f' variable "{var.name}" '
+        elif var:
+            result = f'Variable "{var.name}" '
         else:
-            result = f'Variable "{var.name}"'
-        result += f" {msg}"
+            result = ""
+        result += f"{msg}"
         return result
 
     def state(self, statement: str, vartype, var, msg):

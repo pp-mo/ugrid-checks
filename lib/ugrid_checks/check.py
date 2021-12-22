@@ -305,7 +305,7 @@ def check_meshvar(
         dimension_name = property_as_single_name(
             meshvar.attributes.get(dimattr_name)
         )
-        if location == "boundary":
+        if location in ("boundary", "node"):
             # No 'boundary_dimension' attribute is supported.
             if dimension_name:
                 dimension_name = None
@@ -315,11 +315,12 @@ def check_meshvar(
                     "Mesh",
                     meshvar,
                     (
-                        'has an attribute "boundary_dimension", which is not '
+                        f'has an attribute "{dimattr_name}", which is not '
                         'a valid UGRID term, and may be a mistake (ADVISORY)."'
                     ),
                 )
                 # TODO: add ADVISE code for this ?
+
         if dimension_name:
             # There is an explicit 'xxx_dimension' property.
             if connattr_name not in meshvar.attributes:
@@ -357,6 +358,8 @@ def check_meshvar(
                 if len(conn_var.dimensions) > 0:
                     mesh_dims[location] = conn_var.dimensions[0]
 
+    deduce_face_or_edge_dim("node")
+    deduce_face_or_edge_dim("boundary")
     deduce_face_or_edge_dim("edge")
     deduce_face_or_edge_dim("face")
 
@@ -521,27 +524,32 @@ def check_dataset_inner(file_scan: NcFileSummary):
         mesh_dims[meshname] = dims_dict
 
     # Check for dimensions shared between meshes, which is an advisory warning.
+    # Convert {mesh: {location:dimname}} to {dimname: [meshes]}
     dim_meshes = {}
     for mesh, location_dims in mesh_dims.items():
         for location, dim in location_dims.items():
+            # Fetch list
             meshnames = dim_meshes.get(dim, set())
-            meshnames.add(mesh)
+            if dim:
+                meshnames.add(mesh)
+            # Write list back
+            dim_meshes[dim] = meshnames
 
     for dim, meshnames in dim_meshes.items():
         if len(meshnames) > 1:
             meshnames = sorted(meshnames)
-            one_mesh, other_meshes = meshnames[0], meshnames[1:]
+            other_meshes, last_mesh = meshnames[:-1], meshnames[-1]
             if len(other_meshes) == 1:
                 other_mesh = other_meshes[0]
                 msg = (
                     f'Dimension "{dim}" is mapped by both '
-                    f'mesh "{one_mesh}" and mesh "{other_mesh}".'
+                    f'mesh "{other_mesh}" and mesh "{last_mesh}".'
                 )
             else:
                 msg = f'Dimension "{dim}" is mapped by multiple meshes : '
-                msg += ", ".join(f'"{mesh}"' for mesh in other_meshes[:-1])
-                msg += f'and "{other_meshes[-1]}".'
-            LOG.state("A104", "Mesh", meshvar, msg)
+                msg += ", ".join(f'"{mesh}"' for mesh in other_meshes)
+                msg += f' and "{last_mesh}".'
+            LOG.state("A104", None, None, msg)
 
 
 def printout_reports():
