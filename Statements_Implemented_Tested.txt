@@ -1,0 +1,94 @@
+Mesh variable
+R101    i   t
+R102    i   t
+?R102.a i   t       # add : "R102.a : invalid "cf_role" of a mesh-variable"
+R103    i   t
+R104    i   t
+R105    i   t
+R106    i   t
+R107    i   t       # NOTE: "all" mesh-coord-attributes --> valid mesh-coords
+R108    i   t       # NOTE: "all" mesh-conn-attributes --> valid mesh-conns
+R109    i   t
+R110    i   t
+R111    i   t
+R112                # to remove
+R113    i   t
+R114    i   t
+R115    i   t
+R116    i   t
+R117    i   t
+R118    i   t
+R119    i   t
+R120    i   t
+R121    i   t
+-
+A101    i   t
+A102    i   t
+A103    i   t
+A104    i   t
+?A105   i   t       # add : "A105 ? : "boundary_dimension" is not a valid UGRID term"
+?A106   i   t       # add : "A106 ? : attribute "xxx_dimension" is not valid since there is no "xxx_node_connectivity"
+
+coordinate variable
+R201
+R202
+R203
+-
+A201
+A202
+A203
+A204
+A205
+
+connectivity variable
+R301
+R302
+R303
+R304
+R305
+R306
+R307
+R308
+R309
+R310
+
+A301
+A302
+A303
+A304
+A305
+A306
+A307
+A308
+
+R401
+R402
+R403
+R404
+R405
+
+location index set variable
+A401
+A402
+A403
+A404
+A405
+A406
+
+mesh data variable
+R501
+R502    i   t
+R503
+R504
+R505
+R506
+R507
+R508
+R509
+R510
+
+misc
+A901
+A902
+A903
+A904
