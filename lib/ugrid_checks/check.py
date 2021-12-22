@@ -471,7 +471,7 @@ def check_dataset_inner(file_scan: NcFileSummary):
     all_vars = file_scan.variables
     meshdata_vars = vars_w_props(all_vars, mesh="*")
 
-    # Check that all vars with a 'mesh' properties name valid variables.
+    # Check that any var 'mesh' property names a valid mesh variable.
     all_meshvars = {}
     meshvar_referrers = {}
     for mrv_name, mrv_var in meshdata_vars.items():
@@ -502,6 +502,9 @@ def check_dataset_inner(file_scan: NcFileSummary):
             else:
                 # Include this one in those we check as mesh-vars.
                 all_meshvars[meshvar_name] = all_vars[meshvar_name]
+                # Record name of referring var.
+                # N.B. potentially this can overwrite a previous referrer,
+                # but "any one of several" will be OK for our purpose.
                 meshvar_referrers[meshvar_name] = mrv_name
 
     #
@@ -512,6 +515,8 @@ def check_dataset_inner(file_scan: NcFileSummary):
     all_meshvars.update(meshvars_by_cf_role)
 
     # Check all putative mesh vars.
+    # Also construct a map of mesh dimensions,
+    # mesh_dims: {meshname: {location: dimname}}
     mesh_dims = {}
     for meshname, meshvar in all_meshvars.items():
         dims_dict = check_meshvar(
@@ -524,19 +529,27 @@ def check_dataset_inner(file_scan: NcFileSummary):
         mesh_dims[meshname] = dims_dict
 
     # Check for dimensions shared between meshes, which is an advisory warning.
-    # Convert {mesh: {location:dimname}} to {dimname: [meshes]}
+
+    # Convert mesh_dims: {meshname: {location: dimname}}
+    # .. to dim_meshes: {dimname: [meshnames]}
     dim_meshes = {}
     for mesh, location_dims in mesh_dims.items():
         for location, dim in location_dims.items():
             # Fetch list
             meshnames = dim_meshes.get(dim, set())
             if dim:
+                # TODO: what if a dim is used by 2 different locations of
+                #  of the same mesh ?
                 meshnames.add(mesh)
             # Write list back
             dim_meshes[dim] = meshnames
 
+    # Check for any dims which are used more than once.
     for dim, meshnames in dim_meshes.items():
         if len(meshnames) > 1:
+            # TODO: what if a dim is used by 2 different locations of
+            #  of the same mesh ?
+            #  We would get a repeated meshname here...
             meshnames = sorted(meshnames)
             other_meshes, last_mesh = meshnames[:-1], meshnames[-1]
             if len(other_meshes) == 1:
