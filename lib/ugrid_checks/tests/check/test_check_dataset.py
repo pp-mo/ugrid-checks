@@ -7,7 +7,6 @@ import logging
 import re
 
 import numpy as np
-from numpy import array
 from pytest import fixture
 from ugrid_checks.check import check_dataset
 from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
@@ -266,17 +265,31 @@ class TestChecker_Dataset(DatasetChecker):
 
 
 class TestChecker_MeshVariables(DatasetChecker):
-    # Test mesh-variable checking.
-    def test_r101_mesh_missing_cf_role(self, scan_2d_mesh):
-        del scan_2d_mesh.variables["topology"].attributes["cf_role"]
-        msg = "no \"cf_role\" property, which should be 'mesh_topology'"
-        self.check(scan_2d_mesh, "R101", msg)
+    # Simplified fixtures, when the meshvar is what is wanted.
+    @fixture
+    def meshvar_scan_2d(self, scan_2d_mesh):
+        return scan_2d_mesh.variables["topology"], scan_2d_mesh
 
-    def test_r102_mesh_bad_cf_role(self, scan_2d_mesh):
-        meshvar = scan_2d_mesh.variables["topology"]
+    @fixture
+    def meshvar_scan_1d(self, scan_1d_mesh):
+        return scan_1d_mesh.variables["topology"], scan_1d_mesh
+
+    @fixture
+    def meshvar_scan_0d(self, scan_0d_mesh):
+        return scan_0d_mesh.variables["topology"], scan_0d_mesh
+
+    # Test mesh-variable checking.
+    def test_r101_mesh_missing_cf_role(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        del meshvar.attributes["cf_role"]
+        msg = "no \"cf_role\" property, which should be 'mesh_topology'"
+        self.check(scan, "R101", msg)
+
+    def test_r102_mesh_bad_cf_role(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
         meshvar.attributes["cf_role"] = "something odd"
         self.check(
-            scan_2d_mesh,
+            scan,
             statements=[
                 ("R102", "should be 'mesh_topology'"),
                 (
@@ -286,23 +299,24 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r103_mesh_no_topology_dimension(self, scan_2d_mesh):
-        del scan_2d_mesh.variables["topology"].attributes["topology_dimension"]
-        self.check(scan_2d_mesh, "R103", 'no "topology_dimension"')
+    def test_r103_mesh_no_topology_dimension(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        del meshvar.attributes["topology_dimension"]
+        self.check(scan, "R103", 'no "topology_dimension"')
 
-    def test_r104_mesh_unknown_topology_dimension(self, scan_2d_mesh):
-        scan_2d_mesh.variables["topology"].attributes["topology_dimension"] = 4
-        self.check(scan_2d_mesh, "R104", "not 0, 1 or 2")
+    def test_r104_mesh_unknown_topology_dimension(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["topology_dimension"] = 4
+        self.check(scan, "R104", "not 0, 1 or 2")
 
-    def test_r105_r107_mesh_badcoordattr_nonstring(self, scan_2d_mesh):
+    def test_r105_r107_mesh_badcoordattr_nonstring(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
         # An invalid mesh-coord attribute.
         # This is always caused by a subsidiary specific error, so for testing
         # it doesn't much matter which we choose.
-        scan_2d_mesh.variables["topology"].attributes[
-            "node_coordinates"
-        ] = array(3)
+        meshvar.attributes["node_coordinates"] = 3
         self.check(
-            scan_2d_mesh,
+            scan,
             statements=[
                 (
                     "R105",
@@ -315,12 +329,11 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_empty(self, scan_2d_mesh):
-        scan_2d_mesh.variables["topology"].attributes[
-            "node_coordinates"
-        ] = array("")
+    def test_r105_r107_mesh_badcoordattr_empty(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["node_coordinates"] = ""
         self.check(
-            scan_2d_mesh,
+            scan,
             statements=[
                 (
                     "R105",
@@ -333,12 +346,11 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_invalidname(self, scan_2d_mesh):
-        scan_2d_mesh.variables["topology"].attributes[
-            "node_coordinates"
-        ] = array("$123")
+    def test_r105_r107_mesh_badcoordattr_invalidname(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["node_coordinates"] = "$123"
         self.check(
-            scan_2d_mesh,
+            scan,
             statements=[
                 (
                     "R105",
@@ -351,12 +363,11 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_missingvar(self, scan_2d_mesh):
-        scan_2d_mesh.variables["topology"].attributes[
-            "node_coordinates"
-        ] = array("$123")
+    def test_r105_r107_mesh_badcoordattr_missingvar(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["node_coordinates"] = "$123"
         self.check(
-            scan_2d_mesh,
+            scan,
             statements=[
                 (
                     "R105",
@@ -369,14 +380,14 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r108_mesh_badconn(self, scan_2d_mesh):
+    def test_r108_mesh_badconn(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
         # Checking the catchall error for an invalid mesh-coord attribute.
         # This is always caused by a subsidiary specific error, so for testing
         # it doesn't much matter which we choose.
-        meshvar = scan_2d_mesh.variables["topology"]
-        meshvar.attributes["face_node_connectivity"] = array("")
+        meshvar.attributes["face_node_connectivity"] = ""
         self.check(
-            scan_2d_mesh,
+            scan,
             statements=[
                 (
                     "R105",
@@ -395,83 +406,83 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r109_mesh_missing_node_coords(self, scan_2d_mesh):
-        del scan_2d_mesh.variables["topology"].attributes["node_coordinates"]
+    def test_r109_mesh_missing_node_coords(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        del meshvar.attributes["node_coordinates"]
         msg = "does not have a 'node_coordinates' attribute"
-        self.check(scan_2d_mesh, "R109", msg)
+        self.check(scan, "R109", msg)
 
-    def test_r110_mesh_topologydim0_extra_edgeconn(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
+    def test_r110_mesh_topologydim0_extra_edgeconn(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
         # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["edge_node_connectivity"] = array("node_lat")
+        meshvar.attributes["edge_node_connectivity"] = "node_lat"
         msg = (
             'has "topology_dimension=0", but the presence of.*'
             "'edge_node_connectivity'.*implies it should be 1."
         )
-        self.check(scan_0d_mesh, "R110", msg)
+        self.check(scan, "R110", msg)
 
-    def test_r111_mesh_topologydim1_missing_edgeconn(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
+    def test_r111_mesh_topologydim1_missing_edgeconn(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
         del meshvar.attributes["edge_node_connectivity"]
         # Also remove this, just to avoid an additional error
         del meshvar.attributes["edge_dimension"]
         msg = 'has "topology_dimension=1", but.*' "no 'edge_node_connectivity'"
-        self.check(scan_1d_mesh, "R111", msg)
+        self.check(scan, "R111", msg)
 
     # NOTE: R112 is to be removed
 
-    def test_r113_mesh_topologydim2_missing_faceconn(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
-        meshvar.attributes["topology_dimension"] = array(2)
+    def test_r113_mesh_topologydim2_missing_faceconn(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
+        meshvar.attributes["topology_dimension"] = 2
         msg = 'has "topology_dimension=2", but.*' "no 'face_node_connectivity'"
-        self.check(scan_1d_mesh, "R113", msg)
+        self.check(scan, "R113", msg)
 
-    def test_r113_mesh_topologydim0_extra_faceconn(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
-        meshvar.attributes["face_node_connectivity"] = array("node_lat")
+    def test_r113_mesh_topologydim0_extra_faceconn(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
+        meshvar.attributes["face_node_connectivity"] = "node_lat"
         msg = (
             'has "topology_dimension=0", but the presence of.*'
             "'face_node_connectivity'.*implies it should be 2."
         )
-        self.check(scan_0d_mesh, "R113", msg)
+        self.check(scan, "R113", msg)
 
-    def test_r114_mesh_topologydim1_extra_boundsconn(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
-        meshvar.attributes["boundary_node_connectivity"] = array("node_lat")
+    def test_r114_mesh_topologydim1_extra_boundsconn(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
+        meshvar.attributes["boundary_node_connectivity"] = "node_lat"
         msg = (
             'has a "boundary_node_connectivity".*'
             'there is no "face_node_connectivity"'
         )
-        self.check(scan_1d_mesh, "R114", msg)
+        self.check(scan, "R114", msg)
 
-    def test_r115_mesh_edgedim_unknown(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
-        meshvar.attributes["edge_dimension"] = array("unknown_dim")
+    def test_r115_mesh_edgedim_unknown(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
+        meshvar.attributes["edge_dimension"] = "unknown_dim"
         msg = 'edge_dimension="unknown_dim".* not a dimension'
-        self.check(scan_1d_mesh, "R115", msg)
+        self.check(scan, "R115", msg)
 
-    def test_r117_mesh_facedim_unknown(self, scan_2d_mesh):
-        meshvar = scan_2d_mesh.variables["topology"]
-        meshvar.attributes["face_dimension"] = array("unknown_dim")
+    def test_r117_mesh_facedim_unknown(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["face_dimension"] = "unknown_dim"
         msg = 'face_dimension="unknown_dim".* not a dimension'
-        self.check(scan_2d_mesh, "R117", msg)
+        self.check(scan, "R117", msg)
 
-    def test_r116_mesh_missing_needed_edgedim(self, scan_2d_mesh):
+    def test_r116_mesh_missing_needed_edgedim(self, meshvar_scan_2d):
         # Check that, if some edge connectivities have a non-standard dim
         # order, we then require an edge-dim attribute.
+        meshvar, scan = meshvar_scan_2d
 
         # First add edges and a face-edges map to the 2d mesh
         # (because there are no optional edge connectivities in a 1d mesh)
-        scan_2d_mesh.dimensions["edge_dim"] = NcDimSummary(3, False)
-        scan_2d_mesh.dimensions["n_edge_ends"] = NcDimSummary(2, False)
+        scan.dimensions["edge_dim"] = NcDimSummary(3, False)
+        scan.dimensions["n_edge_ends"] = NcDimSummary(2, False)
         edgenodes_name = "edge_nodes_var"
         edgenodes_conn = NcVariableSummary(
             name=edgenodes_name,
             dimensions=["edge_dim", "n_edge_ends"],
             shape=(3, 2),
             dtype=np.int64,
-            data=None,
-            attributes={},
         )
         # Now add the (optional) edge-face connectivity.
         edgeface_name = "edge_faces_var"
@@ -480,18 +491,15 @@ class TestChecker_MeshVariables(DatasetChecker):
             dimensions=["edge_dim", "num_vertices"],
             shape=(6, 4),
             dtype=np.int64,
-            data=None,
-            attributes={},
         )
-        scan_2d_mesh.variables[edgenodes_name] = edgenodes_conn
-        scan_2d_mesh.variables[edgeface_name] = edgeface_conn
-        meshvar = scan_2d_mesh.variables["topology"]
-        meshvar.attributes["edge_node_connectivity"] = array(edgenodes_name)
-        meshvar.attributes["edge_face_connectivity"] = array(edgeface_name)
+        scan.variables[edgenodes_name] = edgenodes_conn
+        scan.variables[edgeface_name] = edgeface_conn
+        meshvar.attributes["edge_node_connectivity"] = edgenodes_name
+        meshvar.attributes["edge_face_connectivity"] = edgeface_name
 
         # Check this is still ok, with no edge-dim attribute.
         assert "edge_dimension" not in meshvar.attributes
-        self.check(scan_2d_mesh)
+        self.check(scan)
 
         # Now swap the dim-order of the 'edge_faces' variable.
         edgeface_conn.dimensions = edgeface_conn.dimensions[::-1]
@@ -501,15 +509,16 @@ class TestChecker_MeshVariables(DatasetChecker):
             "edge connectivities with non-standard dimension order : "
             f'"{edgeface_name}"'
         )
-        self.check(scan_2d_mesh, "R116", msg)
+        self.check(scan, "R116", msg)
 
         # Reinstating the 'edge_dimension' attribute should make it OK again.
-        meshvar.attributes["edge_dimension"] = array("edge_dim")
-        self.check(scan_2d_mesh)
+        meshvar.attributes["edge_dimension"] = "edge_dim"
+        self.check(scan)
 
-    def test_r118_mesh_missing_needed_facedim_2(self, scan_2d_mesh):
+    def test_r118_mesh_missing_needed_facedim_2(self, meshvar_scan_2d):
         # Check that, if some edge connectivities have a non-standard dim
         # order, we then require an edge-dim attribute.
+        meshvar, scan = meshvar_scan_2d
 
         # Add a face-face map to the 2d mesh
         faceface_name = "face_face_var"
@@ -518,17 +527,14 @@ class TestChecker_MeshVariables(DatasetChecker):
             dimensions=["face_dim", "n_vertices"],
             shape=(6, 4),
             dtype=np.int64,
-            data=None,
-            attributes={},
         )
-        scan_2d_mesh.variables[faceface_name] = faceface_conn
-        meshvar = scan_2d_mesh.variables["topology"]
-        meshvar.attributes["face_face_connectivity"] = array(faceface_name)
+        scan.variables[faceface_name] = faceface_conn
+        meshvar.attributes["face_face_connectivity"] = faceface_name
 
         # Remove the face-dim attribute
         del meshvar.attributes["face_dimension"]
         # Check that this it is still OK, with no checking errors
-        self.check(scan_2d_mesh)
+        self.check(scan)
 
         # Now swap the dim-order of the 'face_edges' variable.
         faceface_conn.dimensions = faceface_conn.dimensions[::-1]
@@ -538,155 +544,156 @@ class TestChecker_MeshVariables(DatasetChecker):
             "face connectivities with non-standard dimension order : "
             f'"{faceface_name}"'
         )
-        self.check(scan_2d_mesh, "R118", msg)
+        self.check(scan, "R118", msg)
 
         # Reinstating the 'face_dimension' attribute should make it OK again.
-        meshvar.attributes["face_dimension"] = array("face_dim")
-        self.check(scan_2d_mesh)
+        meshvar.attributes["face_dimension"] = "face_dim"
+        self.check(scan)
 
-    def test_r119_mesh_faceface_no_faces(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
+    def test_r119_mesh_faceface_no_faces(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
         # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["face_face_connectivity"] = array("node_lat")
+        meshvar.attributes["face_face_connectivity"] = "node_lat"
         msg = (
             'has a "face_face_connectivity".*'
             'there is no "face_node_connectivity"'
         )
-        self.check(scan_1d_mesh, "R119", msg)
+        self.check(scan, "R119", msg)
 
-    def test_r120_mesh_faceedge_no_faces(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
+    def test_r120_mesh_faceedge_no_faces(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
         # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["face_edge_connectivity"] = array("node_lat")
+        meshvar.attributes["face_edge_connectivity"] = "node_lat"
         msg = (
             'has a "face_edge_connectivity".*'
             'there is no "face_node_connectivity"'
         )
-        self.check(scan_1d_mesh, "R120", msg)
+        self.check(scan, "R120", msg)
 
-    def test_r120_mesh_faceedge_no_edges(self, scan_2d_mesh):
-        meshvar = scan_2d_mesh.variables["topology"]
+    def test_r120_mesh_faceedge_no_edges(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar = scan.variables["topology"]
         # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["face_edge_connectivity"] = array("node_lat")
+        meshvar.attributes["face_edge_connectivity"] = "node_lat"
         msg = (
             'has a "face_edge_connectivity".*'
             'there is no "edge_node_connectivity"'
         )
-        self.check(scan_2d_mesh, "R120", msg)
+        self.check(scan, "R120", msg)
 
-    def test_r121_mesh_edgeface_no_faces(self, scan_1d_mesh):
-        meshvar = scan_1d_mesh.variables["topology"]
+    def test_r121_mesh_edgeface_no_faces(self, meshvar_scan_1d):
+        meshvar, scan = meshvar_scan_1d
         # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["edge_face_connectivity"] = array("node_lat")
+        meshvar.attributes["edge_face_connectivity"] = "node_lat"
         msg = (
             'has a "edge_face_connectivity".*'
             'there is no "face_node_connectivity"'
         )
-        self.check(scan_1d_mesh, "R121", msg)
+        self.check(scan, "R121", msg)
 
-    def test_r121_mesh_edgeface_no_edges(self, scan_2d_mesh):
-        meshvar = scan_2d_mesh.variables["topology"]
+    def test_r121_mesh_edgeface_no_edges(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
         # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["edge_face_connectivity"] = array("node_lat")
+        meshvar.attributes["edge_face_connectivity"] = "node_lat"
         msg = (
             'has a "edge_face_connectivity".*'
             'there is no "edge_node_connectivity"'
         )
-        self.check(scan_2d_mesh, "R121", msg)
+        self.check(scan, "R121", msg)
 
-    def test_a101_mesh_variable_dimensions(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
+    def test_a101_mesh_variable_dimensions(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
         meshvar.dimensions = ["num_node"]
         meshvar.shape = (8,)  # to make consistent, but probably unnecessary?
-        self.check(
-            scan_0d_mesh, "A101", 'Mesh variable "topology" has dimensions'
-        )
+        self.check(scan, "A101", 'Mesh variable "topology" has dimensions')
 
-    def test_a102_mesh_variable_stdname(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
-        meshvar.attributes["standard_name"] = array("air_temperature")
+    def test_a102_mesh_variable_stdname(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
+        meshvar.attributes["standard_name"] = "air_temperature"
         self.check(
-            scan_0d_mesh,
+            scan,
             "A102",
             'Mesh variable "topology" has a "standard_name" attribute',
         )
 
-    def test_a103_mesh_variable_units(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
-        meshvar.attributes["units"] = array("K")
+    def test_a103_mesh_variable_units(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
+        meshvar.attributes["units"] = "K"
         self.check(
-            scan_0d_mesh,
+            scan,
             "A103",
             'Mesh variable "topology" has a "units" attribute',
         )
 
     # Note: A104 is tested in TestChecker_Dataset
 
-    def test_a105_mesh_invalid_boundarydim(self, scan_2d_mesh):
-        meshvar = scan_2d_mesh.variables["topology"]
-        meshvar.attributes["boundary_dimension"] = array("odd_name")
+    def test_a105_mesh_invalid_boundarydim(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["boundary_dimension"] = "odd_name"
         msg = (
             'has an attribute "boundary_dimension", which is '
             "not a valid UGRID term"
         )
-        self.check(scan_2d_mesh, "", msg)  # TODO: will be "A105"
+        self.check(scan, "", msg)  # TODO: will be "A105"
 
-    def test_a105_mesh_invalid_nodedim(self, scan_2d_mesh):
-        meshvar = scan_2d_mesh.variables["topology"]
-        meshvar.attributes["node_dimension"] = array("odd_name")
+    def test_a105_mesh_invalid_nodedim(self, meshvar_scan_2d):
+        meshvar, scan = meshvar_scan_2d
+        meshvar.attributes["node_dimension"] = "odd_name"
         msg = (
             'has an attribute "node_dimension", which is '
             "not a valid UGRID term"
         )
-        self.check(scan_2d_mesh, "", msg)  # TODO: will be "A105"
+        self.check(scan, "", msg)  # TODO: will be "A105"
 
-    def test_a106_mesh_unwanted_edgedim(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
-        meshvar.attributes["edge_dimension"] = array("odd_name")
+    def test_a106_mesh_unwanted_edgedim(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
+        meshvar.attributes["edge_dimension"] = "odd_name"
         msg = (
             'has an attribute "edge_dimension", which is not valid.*'
             'no "edge_node_connectivity"'
         )
         #  TODO: will be "A106" -- or possibly "Rxxx" ?
-        self.check(scan_0d_mesh, "", msg)
+        self.check(scan, "", msg)
 
-    def test_a106_mesh_unwanted_facedim(self, scan_0d_mesh):
-        meshvar = scan_0d_mesh.variables["topology"]
-        meshvar.attributes["face_dimension"] = array("odd_name")
+    def test_a106_mesh_unwanted_facedim(self, meshvar_scan_0d):
+        meshvar, scan = meshvar_scan_0d
+        meshvar.attributes["face_dimension"] = "odd_name"
         msg = (
             'has an attribute "face_dimension", which is not valid.*'
             'no "face_node_connectivity"'
         )
         #  TODO: will be "A106" -- or possibly "Rxxx" ?
-        self.check(scan_0d_mesh, "", msg)
+        self.check(scan, "", msg)
 
 
 class TestChecker_DataVariables(DatasetChecker):
-    # Test data-variable checking.
-    def test_r502_datavar_nonexistent_mesh(self, scan_2d_mesh):
-        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = array(
-            "other_mesh"
-        )
-        self.check(scan_2d_mesh, "R502", 'no "other_mesh" variable')
+    @fixture
+    def datavar_scan_2d(self, scan_2d_mesh):
+        return scan_2d_mesh, scan_2d_mesh.variables["sample_data"]
 
-    def test_r502_datavar_bad_mesh_name(self, scan_2d_mesh):
-        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = array(
-            "this that other"
-        )
+    # Test data-variable checking.
+    def test_r502_datavar_nonexistent_mesh(self, datavar_scan_2d):
+        scan, datavar = datavar_scan_2d
+        datavar.attributes["mesh"] = "other_mesh"
+        self.check(scan, "R502", 'no "other_mesh" variable')
+
+    def test_r502_datavar_bad_mesh_name(self, datavar_scan_2d):
+        scan, datavar = datavar_scan_2d
+        datavar.attributes["mesh"] = "this that other"
         msg = (
             "\"mesh='this that other'\", "
             "which is not a valid variable name."
         )
-        self.check(scan_2d_mesh, "R502", msg)
+        self.check(scan, "R502", msg)
 
-    def test_r502_datavar_empty_mesh_name(self, scan_2d_mesh):
-        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = array("")
+    def test_r502_datavar_empty_mesh_name(self, datavar_scan_2d):
+        scan, datavar = datavar_scan_2d
+        datavar.attributes["mesh"] = ""
         msg = "\"mesh=''\", which is not a valid variable name."
-        self.check(scan_2d_mesh, "R502", msg)
+        self.check(scan, "R502", msg)
 
-    def test_r502_datavar_missing_meshvar(self, scan_2d_mesh):
-        scan_2d_mesh.variables["sample_data"].attributes["mesh"] = array(
-            "absent"
-        )
+    def test_r502_datavar_missing_meshvar(self, datavar_scan_2d):
+        scan, datavar = datavar_scan_2d
+        datavar.attributes["mesh"] = "absent"
         msg = "mesh='absent'.*but there is no \"absent\" variable"
-        self.check(scan_2d_mesh, "R502", msg)
+        self.check(scan, "R502", msg)

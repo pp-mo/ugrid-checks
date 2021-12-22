@@ -5,6 +5,33 @@ import dask.array as da
 import numpy as np
 
 
+class Dict_1dArray(dict):
+    """
+    A specialised dictionary type to contain netcdf attributes.
+
+    All values are cast as Numpy arrays of <= 1 dimension.
+    Thus, they will all have dtype, ndim, etc.
+    This then matches what would be read from a file with netCDF4-python.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for key, value in self.items():
+            # Rewrite all content to ensure conversion.
+            self[key] = value
+
+    def __setitem__(self, key, value):
+        value = np.asarray(value)
+        if value.ndim > 1:
+            msg = (
+                f"{self.__class__} value [{key!r}] = {value!r} is an error: "
+                "values may not have more than one dimension."
+            )
+            raise ValueError(msg)
+        super().__setitem__(key, value)
+
+
 @dataclass
 class NcVariableSummary:
     """
@@ -33,6 +60,38 @@ class NcVariableSummary:
     #: If data is not None, it is still possible for access to fail if the
     #: original file has since been modified or removed.
     data: Union[da.Array, None]
+
+    def __init__(
+        self, name, dimensions, shape, dtype, attributes=None, data=None
+    ):
+        """Enhanced init to support optional 'attributes' + 'data'."""
+        self.name = name
+        self.dimensions = dimensions
+        self.shape = shape
+        self.dtype = dtype
+        # Attributes defaults to an empty dict.
+        if attributes is None:
+            attributes = {}
+        self.attributes = attributes
+        # Data may be also None (defaults to None).
+        self.data = data
+
+    def __setattr__(self, key, value):
+        # Ensure correct types for 'attributes' and 'data' properties.
+        if key == "attributes":
+            # 'attributes' is always a dictionary with 0d or 1d array values.
+            value = Dict_1dArray(value)
+        elif key == "data":
+            # 'data' may be None, or an array matching self.shape.
+            if value is not None:
+                value = np.asarray(value)
+                if value.shape != self.shape:
+                    msg = (
+                        f"Can't assign '.data' with shape {value.shape} "
+                        f"to {self.__class__} with shape of {self.shape}."
+                    )
+                    raise ValueError(msg)
+        super().__setattr__(key, value)
 
 
 @dataclass
