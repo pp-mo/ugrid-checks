@@ -30,7 +30,7 @@ def cdl_scan(
     temp_nc_path = Path(tempdir_path).resolve() / temp_nc_file_name
     with open(temp_cdl_path, "w") as tempfile:
         tempfile.write(cdl)
-    cmd = f"ncgen -k4 {temp_cdl_path} -o {temp_nc_path}"
+    cmd = f"ncgen -k4  -o {temp_nc_path} {temp_cdl_path}"
     check_call(cmd, shell=True)
     scan = scan_dataset(temp_nc_path)
     return scan
