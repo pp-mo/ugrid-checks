@@ -2,18 +2,14 @@
 Tests for ugrid_checks.check.check_dataset
 
 """
-from copy import deepcopy
 import logging
 import re
 
 import numpy as np
 from pytest import fixture
-from ugrid_checks.check import (
-    check_dataset,
-)
+from ugrid_checks.check import check_dataset
 from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
-from ugrid_checks.tests import cdl_scanner
-from ugrid_checks.tests import next_mesh
+from ugrid_checks.tests import cdl_scanner, next_mesh
 
 # Prevent error from 'black' about unused import.
 # NOTE : the import is *not* in fact redundant, since pytest requires it.
@@ -243,12 +239,12 @@ class TestChecker_Dataset(DatasetChecker):
 
     def test_a104_dataset_shared_meshdims_2(self, scan_0d_mesh):
         # Create a minimal additional mesh, just a copy of the given one
-        mesh2 = next_mesh(scan_0d_mesh, 'topology')
+        next_mesh(scan_0d_mesh, "topology")
         # Fix the new node-coord variables to use the OLD nodes dim
-        for xy in ('lon', 'lat'):
-            new_node_coord = scan_0d_mesh.variables[f'node_{xy}_2']
-            assert new_node_coord.dimensions == ['num_node_2']
-            new_node_coord.dimensions = ['num_node']
+        for xy in ("lon", "lat"):
+            new_node_coord = scan_0d_mesh.variables[f"node_{xy}_2"]
+            assert new_node_coord.dimensions == ["num_node_2"]
+            new_node_coord.dimensions = ["num_node"]
         msg = (
             'Dimension "num_node" is mapped by both mesh "topology" and '
             'mesh "topology_2"'
@@ -257,14 +253,14 @@ class TestChecker_Dataset(DatasetChecker):
 
     def test_a104_dataset_shared_meshdims_3(self, scan_0d_mesh):
         # Create 2 additional meshes
-        mesh2 = next_mesh(scan_0d_mesh, 'topology')
-        mesh3 = next_mesh(scan_0d_mesh, 'topology_2')
+        next_mesh(scan_0d_mesh, "topology")
+        next_mesh(scan_0d_mesh, "topology_2")
         # Fix the new node-coord variables to use the OLD nodes dim
         for imesh in (2, 3):
-            for xy in ('lon', 'lat'):
-                new_node_coord = scan_0d_mesh.variables[f'node_{xy}_{imesh}']
-                assert new_node_coord.dimensions == [f'num_node_{imesh}']
-                new_node_coord.dimensions = ['num_node']
+            for xy in ("lon", "lat"):
+                new_node_coord = scan_0d_mesh.variables[f"node_{xy}_{imesh}"]
+                assert new_node_coord.dimensions == [f"num_node_{imesh}"]
+                new_node_coord.dimensions = ["num_node"]
         msg = (
             'Dimension "num_node" is mapped by multiple meshes : '
             '"topology", "topology_2" and "topology_3".'
@@ -715,13 +711,13 @@ class TestChecker_Coords(DatasetChecker):
     # Test mesh-coordinate checking.
     def test_r201_coord_multidim(self, coordvar_scan_2d):
         scan, coord = coordvar_scan_2d
-        coord.dimensions = coord.dimensions + ('num_vertices',)
+        coord.dimensions = coord.dimensions + ("num_vertices",)
         msg = '"node_lon".*one dimension.*has 2 dimensions'
         self.check(scan, "R201", msg)
 
     def test_r202_coord_wrongdim(self, coordvar_scan_2d):
         scan, coord = coordvar_scan_2d
-        coord.dimensions = ('face_dim',)
+        coord.dimensions = ("face_dim",)
         msg = (
             'dimension "face_dim", but the parent mesh '
             'node dimension is "num_node".'
