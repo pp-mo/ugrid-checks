@@ -10,16 +10,17 @@ from subprocess import check_call
 from typing import Text, Union
 
 from pytest import fixture
+from ugrid_checks.check import (
+    _VALID_CONNECTIVITY_ROLES,
+    _VALID_MESHCOORD_ATTRS,
+)
 from ugrid_checks.nc_dataset_scan import (
-    scan_dataset,
     NcFileSummary,
     NcVariableSummary,
+    scan_dataset,
 )
 from ugrid_checks.scan_utils import property_namelist
-from ugrid_checks.check import (
-    _VALID_MESHCOORD_ATTRS,
-    _VALID_CONNECTIVITY_ROLES
-)
+
 
 def cdl_scan(
     cdl: Text, tempdir_path: Path, tempfile_name: Union[Text, None] = None
@@ -65,18 +66,19 @@ def cdl_scanner(tmp_path):
 
     return CdlScanner(tmp_path)
 
+
 #
-# Manipulation utilities
-# N.B. could perhaps live in 'ugrid_checks.mesh_utils', as a higher level
-# concept than 'scan_utils'.  But at present, only expected usage is in tests.
+# Utilities to make duplicated structures within file-scans.
+# N.B. these could perhaps be written for more generalised use, but at present
+# their only expected usage is in tests.
 #
 def next_name(name: str) -> str:
     # Convert 'xxx' to 'xxx_2' and 'xxx_<N>' to 'xxx_<N+1>'
-    if name[-2] == '_' and name[-1].isdigit():
+    if name[-2] == "_" and name[-1].isdigit():
         digit = int(name[-1:])
         name = name[:-1] + str(digit + 1)
     else:
-        name += '_2'  # NB don't use '_1'
+        name += "_2"  # NB don't use '_1'
 
     return name
 
@@ -94,11 +96,12 @@ def next_dim(file_scan: NcFileSummary, dim_name: str) -> str:
     return new_name
 
 
-def next_var(file_scan: NcFileSummary, var_name: str, ref_attrs=None) \
-        -> NcVariableSummary:
+def next_var(
+    file_scan: NcFileSummary, var_name: str, ref_attrs=None
+) -> NcVariableSummary:
     # Return the 'next-named' var, creating it if necessary.
     # This also 'bumps' its dimensions, and any referenced variables.
-    # Referenced variables are those named in attributes 'ref_attrs', plus
+    # Referenced variables are those named in attribute 'ref_attrs', plus
     # 'mesh', 'coordinates' and 'bounds'.
     new_name = next_name(var_name)
     new_var = file_scan.variables.get(new_name)
@@ -107,27 +110,28 @@ def next_var(file_scan: NcFileSummary, var_name: str, ref_attrs=None) \
         new_var = copy.deepcopy(old_var)
         new_var.name = new_name
         new_var.dimensions = [
-            next_dim(file_scan, dimname)
-            for dimname in old_var.dimensions
+            next_dim(file_scan, dimname) for dimname in old_var.dimensions
         ]
         # Shift any simple var refs (for datavar usage)
         if ref_attrs is None:
             ref_attrs = []
         # always do these ones
-        ref_attrs += ['mesh', 'bounds', 'coordinates']
+        ref_attrs += ["mesh", "bounds", "coordinates"]
         for attrname in ref_attrs:
             inner_varsattr = old_var.attributes.get(attrname)
             inner_varnames = property_namelist(inner_varsattr)
             if inner_varnames:
-                new_names = [next_var(file_scan, inner_name).name
-                             for inner_name in inner_varnames]
-                new_var.attributes[attrname] = ' '.join(new_names)
+                new_names = [
+                    next_var(file_scan, inner_name).name
+                    for inner_name in inner_varnames
+                ]
+                new_var.attributes[attrname] = " ".join(new_names)
         file_scan.variables[new_var.name] = new_var
     return new_var
 
-def next_mesh(file_scan: NcFileSummary, mesh_name:str) \
-        -> NcVariableSummary:
-    # Create a duplicate of 'mesh' and all its parts in the scan.
+
+def next_mesh(file_scan: NcFileSummary, mesh_name: str) -> NcVariableSummary:
+    # Return the 'next-named' mesh, creating it if needed.
     # This means duplicating its dimensions, coords and connectivities.
     # N.B. unlike the checker code itself, we here assume that the original
     # mesh is complete + consistent.
@@ -136,12 +140,10 @@ def next_mesh(file_scan: NcFileSummary, mesh_name:str) \
     if not new_mesh:
         # Copy the variable, also duplicating any coord+connectivity variables.
         extra_ref_attrs = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
-        new_mesh = next_var(
-            file_scan, mesh_name,
-            ref_attrs=extra_ref_attrs)
-        # Also 'bump' any dimension attributes.
-        for location in ('face', 'edge'):
-            coords_attr = f'{location}_dimension'
+        new_mesh = next_var(file_scan, mesh_name, ref_attrs=extra_ref_attrs)
+        # Similarly 'bump' any mesh-dimension attributes.
+        for location in ("face", "edge"):
+            coords_attr = f"{location}_dimension"
             dimname = new_mesh.attributes.get(coords_attr)
             if dimname:
                 new_mesh.attributes[coords_attr] = next_name(dimname)
