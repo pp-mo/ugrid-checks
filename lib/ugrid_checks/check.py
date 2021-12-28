@@ -1,7 +1,7 @@
 from logging import LogRecord
 from pathlib import Path
 import re
-from typing import AnyStr, Dict, List, Union
+from typing import AnyStr, Dict, List, Union, Tuple
 
 from .logging import LOG
 from .nc_dataset_scan import NcFileSummary, NcVariableSummary, scan_dataset
@@ -27,8 +27,12 @@ _VALID_CF_ROLES = [
     "location_index_set",
 ] + _VALID_CONNECTIVITY_ROLES
 
+_VALID_MESHCOORD_ATTRS = [
+    f"{location}_coordinates" for location in ("face", "edge", "node")
+]
+
 # Valid cf varname regex : copied from iris.common.metadata code.
-_VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z][a-zA-Z0-9]*[\w\.\+\-@]*$""")
+_VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z][a-zA-Z0-9]*[\w.+\-@]*$""")
 
 
 def check_mesh_attr_is_varlist(
@@ -99,12 +103,214 @@ def check_mesh_attr_is_varlist(
     return success
 
 
-def check_mesh_coordinate(file_scan, meshvar, attr_name, mesh_dims):
+def var_ref_problem(
+        file_scan: NcFileSummary,
+        attr_value: str):
+    """
+    Make a text description of any problems with a single-variable reference.
+
+    Check that the input contains a single, valid name, referring to an
+    existing variable.
+    If no problem, returns an empty string.
+
+    """
+    succeed = True
+    names = property_namelist(attr_value)
+    if len(names) != 1:
+        result = "is not a single variable name."
+        succeed = False
+    if succeed:
+        boundsvar_name = property_as_single_name(attr_value)
+        if not _VALID_NAME_REGEX.match(boundsvar_name):
+            result = f"is not a valid netcdf variable name."
+            succeed = False
+    if succeed:
+        bounds_var = file_scan.variables.get(boundsvar_name)
+        if bounds_var is None:
+            result = 'is not a variable in the dataset.'
+            succeed = False
+    if succeed:
+        result = ""
+    return result
+
+
+def check_coord_bounds(
+        file_scan: NcFileSummary,
+        coord: NcVariableSummary
+    ) -> List[Tuple[str]]:
+    """
+    Validity-check the bounds of a coordinate (if any).
+
+    Ok if bounds-attribute does not exist, but not if it is an empty string.
+    Check: existence, n-dims, parent dimension, standard-name and units.
+
+    Returns
+    codes_and_messages : List[tuple(str, str)]
+        a list of codes and messages, to be logged in the context of the parent
+        coordinate variable.
+
+    """
+    result_codes_and_messages = []
+    def log_bounds_statement(code, msg):
+        msg = f'has bounds "{bounds_name}", which ' + msg
+        result_codes_and_messages.append((code, msg))
+
+    result = ""
+    bounds_name = coord.attributes.get('bounds')
+    has_bounds = bounds_name is not None
+    if has_bounds:
+        msg = var_ref_problem(file_scan, bounds_name)
+        if msg != "":
+            log_bounds_statement("R203", msg)
+            has_bounds = False
+
+    if has_bounds:
+        # NB from the above check, we do have a bounds variable.
+        bounds_var = file_scan.variables[bounds_name]
+        bounds_dims = bounds_var.dimensions
+        (coord_dim,) = coord.dimensions  # NB always has exactly 1
+        if coord_dim not in bounds_dims:
+            msg = (
+                f'has dimensions {bounds_dims!r}, which does not include '
+                f'the parent variable dimension, {coord_dim}.'
+            )
+            log_bounds_statement("R203", msg)
+
+        n_bounds_dims = bounds_dims
+        if n_bounds_dims != 2:
+            msg = (
+                f'has dimensions {bounds_dims!r}, of which there should be '
+                f'2, instead of {n_bounds_dims}.'
+            )
+            log_bounds_statement("R203", msg)
+
+        # Do the data-values check.  This is potentially costly.
+        if coord.data is not None:
+            # TODO: enable data-value checks by attaching lazy data arrays
+            # to scan variables.
+            assert bounds_var.data is not None
+            raise ValueError("Not ready for data-value checks.")
+            log_bounds_statement("A205", "???")
+
+        def check_attr_mismatch(attr_name):
+            coord_attr, bounds_attr = [
+                var.attributes.get(attr_name)
+                for var in (coord, bounds_var)
+            ]
+            if bounds_attr is not None and bounds_attr != coord_attr:
+                msg = (
+                    f'has {attr_name}="{bounds_attr}", which does not match '
+                    f'the parent {attr_name} of "{coord_attr}".'
+                )
+                log_bounds_statement("R203", msg)
+
+        check_attr_mismatch('standard_name')
+        check_attr_mismatch('units')
+
+    return result_codes_and_messages
+
+
+def check_mesh_coordinates(
+        file_scan: NcFileSummary,
+        meshvar: NcVariableSummary,
+        attr_name: str,
+        mesh_dims: Dict[str, str],
+        all_meshvars: List[NcVariableSummary],
+    ):
     """Validity-check a coordinate attribute of a mesh-variable."""
-    value = meshvar.attributes.get(attr_name)
-    more_todo = value is not None
-    if more_todo:
-        pass
+    # Note: the content of the coords attribute was already checked
+
+    # Elements which change as we scan the various coords.
+    coord = None  # Changes as we scan them.
+    common_message_prefix = ""
+    coord_context_str = ""
+    # Function to emit a statement message, adding context as to the specific
+    # coord variable.
+    def log_coord(code, msg):
+        LOG.state(
+            code,
+            "Mesh coordinate",
+            coord,
+            common_message_prefix + msg
+        )
+
+    coord_names = property_namelist(meshvar.attributes.get(attr_name))
+    for coord_name in coord_names:
+        if coord_name not in file_scan.variables:
+            # This problem will already have been detected + logged.
+            continue
+        coord = file_scan.variables[coord_name]
+        ndims = len(coord.dimensions)
+        common_message_prefix = f'within {meshvar.name}:{attr_name} '
+        coord_ndims = len(coord.dimensions)
+        if coord_ndims != 1:
+            msg = (
+                f"should have exactly one dimension, but has "
+                f"{coord_ndims} dimensions : {coord.dimensions!r}."
+            )
+            log_coord("R201", msg)
+        else:
+            # Check the dimension is the correct one according to location.
+            (coord_dim,) = coord.dimensions
+            location = attr_name.split('_')[0]
+            mesh_dim = mesh_dims[location]
+            if coord_dim != mesh_dim:
+                msg = coord_context_str + (
+                    f'has dimension "{coord_dim}", but the parent mesh '
+                    f'{location} dimension is "{mesh_dim}".'
+                )
+                log_coord("R202", msg)
+            # Check coord bounds (if any)
+            # N.B. this *also* assumes a single dim for the primary var
+            codes_and_messages = check_coord_bounds(
+                file_scan, coord
+            )
+            for code, msg in codes_and_messages:
+                log_coord(code, msg)
+
+        # Advisory notes..
+        # A201 should have 1-and-only-1 parent mesh
+        parent_meshes = []
+        for meshname in sorted(all_meshvars):
+            meshvar = all_meshvars[meshname]
+            for attr in _VALID_MESHCOORD_ATTRS:
+                attrval = meshvar.attributes.get(attr, "")
+                names = str(attrval).split(' ')
+                if coord_name in names:
+                    parent_meshes.append(meshname)
+        if len(parent_meshes) != 1:
+            msg = (
+                'has multiple mesh variables referring to it : '
+                f'{sorted(parent_meshes)!r}.'
+            )
+            log_coord("A201", msg)
+
+        # A202 floating-point type
+        dtype = coord.dtype
+        if dtype.kind != "f":
+            log_coord(
+                "A202",
+                f'has a dtype which is not floating-point : {dtype}.'
+            )
+
+        # A203 standard-name : has+valid (can't handle fully ??)
+        stdname = coord.attributes.get('standard_name')
+        if not stdname:
+            log_coord(
+                "A203",
+                'has no "standard_name" attribute.'
+            )
+
+        # A204 units : has+valid (can't handle fully ??)
+        stdname = coord.attributes.get('units')
+        if not stdname:
+            log_coord(
+                "A204",
+                'has no "units" attribute.'
+            )
+
+        # A205 bounds data values match derived ones
+        # - did this already above, within "check_coord_bounds"
 
 
 def check_mesh_connectivity(file_scan, meshvar, attr_name, mesh_dims):
@@ -118,6 +324,7 @@ def check_mesh_connectivity(file_scan, meshvar, attr_name, mesh_dims):
 def check_meshvar(
     meshvar: NcVariableSummary,
     file_scan: NcFileSummary,
+    all_meshvars: List[NcVariableSummary],
     name_of_a_referring_var: Union[str, None] = None,
 ) -> Dict[str, str]:
     """
@@ -256,10 +463,8 @@ def check_meshvar(
     # topology_dimension = appropriate_dim
 
     # Check that coordinate and connectivity attributes are valid "varlists"
-    mesh_coord_attr_names = [
-        f"{element}_coordinates" for element in ("face", "edge", "node")
-    ]
-    varlist_names = mesh_coord_attr_names + _VALID_CONNECTIVITY_ROLES
+    varlist_names =\
+        list(_VALID_MESHCOORD_ATTRS) + _VALID_CONNECTIVITY_ROLES
     for attr in varlist_names:
         ok = check_mesh_attr_is_varlist(file_scan, meshvar, attr)
         if not ok:
@@ -405,8 +610,14 @@ def check_meshvar(
         LOG.state(errcode, "Mesh", meshvar, msg)
 
     # Check that all existing coordinates are valid.
-    for attr in mesh_coord_attr_names:
-        check_mesh_coordinate(file_scan, meshvar, attr, mesh_dims)
+    for coords_name in _VALID_MESHCOORD_ATTRS:
+        location = coords_name.split('_')[0]
+        # Only check coords of locations present in the mesh.
+        # This avoids complaints about coords dis-connected by problems with
+        # the topology identification.
+        if mesh_dims[location]:
+            check_mesh_coordinates(
+                file_scan, meshvar, coords_name, mesh_dims, all_meshvars)
 
     # Check that all existing connectivities are valid.
     for attr in _VALID_CONNECTIVITY_ROLES:
@@ -457,7 +668,7 @@ def check_dataset_inner(file_scan: NcFileSummary):
 
     This low-level routine operates on an abstract "file-scan" representation
     rather than a real file.
-    All checking messsages are recorded with :meth:`LOG.state`.
+    All checking messages are recorded with :meth:`LOG.state`.
 
     Parameters
     ----------
@@ -515,25 +726,33 @@ def check_dataset_inner(file_scan: NcFileSummary):
     all_meshvars.update(meshvars_by_cf_role)
 
     # Check all putative mesh vars.
-    # Also construct a map of mesh dimensions,
-    # mesh_dims: {meshname: {location: dimname}}
-    mesh_dims = {}
+
+    # Build a map of mesh dimensions,
+    # all_meshes_dims: {meshname: {location: dimname}}
+    all_meshes_dims = {}
+
+    # Also keep an account of coordinates + connectivities which are
+    # cross-referred between different meshes.
+    # Just so that we can avoid warning about these more than once.
+    # cross_mapped_coords
+
     for meshname, meshvar in all_meshvars.items():
         dims_dict = check_meshvar(
             meshvar,
             file_scan=file_scan,
+            all_meshvars=all_meshvars,
             name_of_a_referring_var=meshvar_referrers.get(meshname, None),
         )
         # (NB names should be var_names of the vars, so all different)
-        assert meshname not in mesh_dims
-        mesh_dims[meshname] = dims_dict
+        assert meshname not in all_meshes_dims
+        all_meshes_dims[meshname] = dims_dict
 
     # Check for dimensions shared between meshes, which is an advisory warning.
 
-    # Convert mesh_dims: {meshname: {location: dimname}}
+    # Convert all_meshes_dims: {meshname: {location: dimname}}
     # .. to dim_meshes: {dimname: [meshnames]}
     dim_meshes = {}
-    for mesh, location_dims in mesh_dims.items():
+    for mesh, location_dims in all_meshes_dims.items():
         for location, dim in location_dims.items():
             # Fetch list
             meshnames = dim_meshes.get(dim, set())

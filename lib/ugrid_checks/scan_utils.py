@@ -13,6 +13,7 @@ def property_namelist(np_property_value):
         if np_property_value.dtype.kind == "U":
             # Don't handle non-string values.  Simply return empty.
             result = str(np_property_value).split()
+            result = [val for val in result if val]
     return result
 
 
