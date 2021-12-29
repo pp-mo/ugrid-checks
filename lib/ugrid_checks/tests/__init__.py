@@ -144,7 +144,7 @@ def next_mesh(file_scan: NcFileSummary, mesh_name: str) -> NcVariableSummary:
         # Similarly 'bump' any mesh-dimension attributes.
         for location in ("face", "edge"):
             coords_attr = f"{location}_dimension"
-            dimname = new_mesh.attributes.get(coords_attr)
+            dimname = str(new_mesh.attributes.get(coords_attr, ""))
             if dimname:
                 new_mesh.attributes[coords_attr] = next_name(dimname)
     return new_mesh
