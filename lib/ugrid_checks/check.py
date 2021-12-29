@@ -74,7 +74,7 @@ class Checker:
                 LOG.state(
                     "R105",
                     "Mesh",
-                    meshvar,
+                    meshvar.name,
                     f"attribute '{attrname}' does not have string type.",
                 )
             if success:
@@ -85,7 +85,7 @@ class Checker:
                     LOG.state(
                         "R105",
                         "Mesh",
-                        meshvar,
+                        meshvar.name,
                         f"attribute '{attrname}' = \"{value}\", "
                         "which is not a valid list of netcdf variable names.",
                     )
@@ -98,7 +98,7 @@ class Checker:
                         LOG.state(
                             "R105",
                             "Mesh",
-                            meshvar,
+                            meshvar.name,
                             f"attribute '{attrname}' = \"{varname}\", "
                             "which is not a valid netcdf variable name.",
                         )
@@ -107,7 +107,7 @@ class Checker:
                         LOG.state(
                             "R106",
                             "Mesh",
-                            meshvar,
+                            meshvar.name,
                             f"attribute '{attrname}' refers to a variable "
                             f'"{varname}", but there is no such variable '
                             "in the dataset.",
@@ -225,14 +225,14 @@ class Checker:
 
         # Elements which change as we scan the various coords.
         coord = None  # Changes as we scan them.
-        common_message_prefix = ""
+        common_msg_prefix = ""
         coord_context_str = ""
 
         # Function to emit a statement message, adding context as to the
         # specific coord variable.
         def log_coord(code, msg):
             LOG.state(
-                code, "Mesh coordinate", coord, common_message_prefix + msg
+                code, "Mesh coordinate", coord.name, common_msg_prefix + msg
             )
 
         coord_names = property_namelist(meshvar.attributes.get(attr_name))
@@ -241,7 +241,7 @@ class Checker:
                 # This problem will already have been detected + logged.
                 continue
             coord = self._all_vars[coord_name]
-            common_message_prefix = f"within {meshvar.name}:{attr_name} "
+            common_msg_prefix = f"within {meshvar.name}:{attr_name} "
             coord_ndims = len(coord.dimensions)
             if coord_ndims != 1:
                 msg = (
@@ -266,22 +266,12 @@ class Checker:
                 for code, msg in codes_and_messages:
                     log_coord(code, msg)
 
+            #
             # Advisory notes..
-            # A201 should have 1-and-only-1 parent mesh
-            parent_meshes = []
-            for some_meshname in sorted(self._all_meshvars):
-                some_meshvar = self._all_meshvars[some_meshname]
-                for attr in _VALID_MESHCOORD_ATTRS:
-                    attrval = some_meshvar.attributes.get(attr, "")
-                    names = str(attrval).split(" ")
-                    if coord_name in names:
-                        parent_meshes.append(some_meshname)
-            if len(parent_meshes) != 1:
-                msg = (
-                    "has multiple mesh variables referring to it : "
-                    f"{sorted(parent_meshes)!r}."
-                )
-                log_coord("A201", msg)
+            #
+
+            # A201 should have 1-and-only-1 parent mesh : this is handled by
+            # 'check_dataset_inner', as it involves multiple meshes.
 
             # A202 floating-point type
             dtype = coord.dtype
@@ -347,7 +337,7 @@ class Checker:
                 msg += f'a "cf_role" of "{cfrole_prop}",'
                 errcode = "R102"
             msg += " which should be 'mesh_topology'."
-            LOG.state(errcode, "", meshvar, msg)
+            LOG.state(errcode, "", meshvar.name, msg)
             # Also, if the 'cf_role' was something else, then check it is a
             # valid option + emit an additional message if needed.
             if cfrole_prop is not None and cfrole_prop not in _VALID_CF_ROLES:
@@ -356,12 +346,14 @@ class Checker:
                     "which is not a valid UGRID cf_role."
                 )
                 # "R102.a"
-                LOG.state("?", "Mesh", meshvar, msg)
+                LOG.state("?", "Mesh", meshvar.name, msg)
 
         # Check all other attributes of mesh vars.
         topology_dimension = meshvar.attributes.get("topology_dimension")
         if topology_dimension is None:
-            LOG.state("R103", "Mesh", meshvar, 'has no "topology_dimension".')
+            LOG.state(
+                "R103", "Mesh", meshvar.name, 'has no "topology_dimension".'
+            )
         else:
             # Check the topology dimension.
             # In principle, this controls which other connectivity properties
@@ -371,7 +363,7 @@ class Checker:
                 LOG.state(
                     "R104",
                     "Mesh",
-                    meshvar,
+                    meshvar.name,
                     (
                         f'has "topology_dimension={topology_dimension}", '
                         "which is not 0, 1 or 2."
@@ -435,7 +427,7 @@ class Checker:
                         f"but it has no '{toplogy_required_attribute}' "
                         f"attribute."
                     )
-                LOG.state(errcode, "Mesh", meshvar, msg)
+                LOG.state(errcode, "Mesh", meshvar.name, msg)
 
         # We will use the 'calculated' one to scope any remaining checks.
         # TODO: remove this, if it continues to be unused.
@@ -451,7 +443,7 @@ class Checker:
                 LOG.state(
                     "R108" if is_conn else "R107",
                     "Mesh",
-                    meshvar,
+                    meshvar.name,
                     (
                         f'attribute "{attr}" = "{value}", which is not a list '
                         "of variables in the dataset."
@@ -468,7 +460,7 @@ class Checker:
             LOG.state(
                 "R109",
                 "Mesh",
-                meshvar,
+                meshvar.name,
                 "does not have a 'node_coordinates' attribute.",
             )
         else:
@@ -501,7 +493,7 @@ class Checker:
                     LOG.state(
                         "?",
                         "Mesh",
-                        meshvar,
+                        meshvar.name,
                         (
                             f'has an attribute "{dimattr_name}", which is not '
                             "a valid UGRID term, and may be "
@@ -517,7 +509,7 @@ class Checker:
                     LOG.state(
                         "?",
                         "Mesh",
-                        meshvar,
+                        meshvar.name,
                         f'has an attribute "{dimattr_name}", '
                         "which is not valid "
                         f'since there is no "{connattr_name}".',
@@ -529,7 +521,7 @@ class Checker:
                     LOG.state(
                         errcode,
                         "Mesh",
-                        meshvar,
+                        meshvar.name,
                         f'has {dimattr_name}="{dimension_name}", which is not '
                         "a dimension in the dataset.",
                     )
@@ -589,7 +581,7 @@ class Checker:
                 f"{location} connectivities "
                 f"with non-standard dimension order : {conn_names_str}."
             )
-            LOG.state(errcode, "Mesh", meshvar, msg)
+            LOG.state(errcode, "Mesh", meshvar.name, msg)
 
         # Check that all existing coordinates are valid.
         for coords_name in _VALID_MESHCOORD_ATTRS:
@@ -626,7 +618,7 @@ class Checker:
                     )
                     err_msg += "or ".join(missing_elements)
                     err_msg += " attribute present."
-                    LOG.state(errcode, "Mesh", meshvar, err_msg)
+                    LOG.state(errcode, "Mesh", meshvar.name, err_msg)
 
         check_requires("R114", "boundary_node_connectivity", "face")
         check_requires("R119", "face_face_connectivity", "face")
@@ -635,13 +627,16 @@ class Checker:
 
         # Advisory checks.
         if meshvar.dimensions:
-            LOG.state("A101", "Mesh", meshvar, "has dimensions.")
+            LOG.state("A101", "Mesh", meshvar.name, "has dimensions.")
         if "standard_name" in meshvar.attributes:
             LOG.state(
-                "A102", "Mesh", meshvar, 'has a "standard_name" attribute.'
+                "A102",
+                "Mesh",
+                meshvar.name,
+                'has a "standard_name" attribute.',
             )
         if "units" in meshvar.attributes:
-            LOG.state("A103", "Mesh", meshvar, 'has a "units" attribute.')
+            LOG.state("A103", "Mesh", meshvar.name, 'has a "units" attribute.')
         # NOTE: "A104" relates to multiple meshvars, so is handled in caller.
 
         return mesh_dims
@@ -675,10 +670,9 @@ class Checker:
                 LOG.state(
                     "R502",
                     "Mesh data",
-                    mrv_var,
+                    mrv_name,
                     (
-                        f"variable {mrv_name} has attribute "
-                        f"\"mesh='{meshprop}'\", which is not a "
+                        f"has attribute \"mesh='{meshprop}'\", which is not a "
                         "valid variable name."
                     ),
                 )
@@ -687,7 +681,7 @@ class Checker:
                     LOG.state(
                         "R502",
                         "Mesh data",
-                        mrv_var,
+                        mrv_name,
                         (
                             f"has attribute \"mesh='{meshvar_name}'\", but "
                             f'there is no "{meshvar_name}" variable '
@@ -763,6 +757,47 @@ class Checker:
                     msg += ", ".join(f'"{mesh}"' for mesh in other_meshes)
                     msg += f' and "{last_mesh}".'
                 LOG.state("A104", None, None, msg)
+
+        # Check for coords and conns referenced by multiple meshes.
+        # A201 coord should have 1-and-only-1 parent mesh
+        # A301 connectivity should have 1-and-only-1 parent mesh
+        var_refs_meshes_attrs = {}
+        all_ref_attrs = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
+        for some_meshname in sorted(self._all_meshvars):
+            some_meshvar = self._all_meshvars[some_meshname]
+            for some_refattr in all_ref_attrs:
+                is_coord = some_refattr in _VALID_MESHCOORD_ATTRS
+                attrval = some_meshvar.attributes.get(some_refattr, None)
+                somevar_names = property_namelist(attrval)
+                for somevar_name in somevar_names:
+                    # NB only collect valid refs (to real variables)
+                    if somevar_name in self._all_vars:
+                        meshes = var_refs_meshes_attrs.get(somevar_name, set())
+                        meshes.add((some_meshname, some_refattr))
+                        var_refs_meshes_attrs[somevar_name] = meshes
+
+        for some_varname, meshes_and_attrs in var_refs_meshes_attrs.items():
+            some_var = self._all_vars[some_varname]  # NB have only 'real' refs
+            if len(meshes_and_attrs) > 1:
+                refs_msg = ", ".join(
+                    [
+                        f"{some_mesh}:{attr_name}"
+                        for some_mesh, attr_name in meshes_and_attrs
+                    ]
+                )
+                msg = f"is referenced by multiple mesh variables : {refs_msg}."
+
+                # Structurally, a var *could* be referenced as both a coord
+                # *and* a connectivity.  But they have different required
+                # numbers of dims, so we use that to decide what to call it.
+                is_coord = len(some_var.dimensions) == 1
+                if is_coord:
+                    vartype = "Mesh coordinate"
+                    code = "A201"
+                else:
+                    vartype = "Mesh connectivity"
+                    code = "A301"
+                LOG.state(code, vartype, some_varname, msg)
 
 
 def check_dataset_inner(file_scan: NcFileSummary):

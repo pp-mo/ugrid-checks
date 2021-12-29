@@ -101,6 +101,11 @@ class NcDimSummary:
     length: int
     is_unlimited: bool
 
+    def __init__(self, length, is_unlimited=False):
+        """Enhanced init to support optional is_unlimited arg."""
+        self.length = length
+        self.is_unlimited = is_unlimited
+
 
 @dataclass
 class NcFileSummary:

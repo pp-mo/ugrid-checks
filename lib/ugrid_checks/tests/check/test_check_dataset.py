@@ -238,7 +238,7 @@ class TestChecker_Dataset(DatasetChecker):
         self.check(scan_0d_mesh)
 
     def test_a104_dataset_shared_meshdims_2(self, scan_0d_mesh):
-        # Create a minimal additional mesh, just a copy of the given one
+        # Copy 'topology' mesh and all its components to 'topology_2' etc
         next_mesh(scan_0d_mesh, "topology")
         # Fix the new node-coord variables to use the OLD nodes dim
         for xy in ("lon", "lat"):
@@ -253,8 +253,8 @@ class TestChecker_Dataset(DatasetChecker):
 
     def test_a104_dataset_shared_meshdims_3(self, scan_0d_mesh):
         # Create 2 additional meshes
-        next_mesh(scan_0d_mesh, "topology")
-        next_mesh(scan_0d_mesh, "topology_2")
+        next_mesh(scan_0d_mesh, "topology")  # makes 'topology_2'
+        next_mesh(scan_0d_mesh, "topology_2")  # makes 'topology_3'
         # Fix the new node-coord variables to use the OLD nodes dim
         for imesh in (2, 3):
             for xy in ("lon", "lat"):
@@ -418,8 +418,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r110_mesh_topologydim0_extra_edgeconn(self, meshvar_scan_0d):
         meshvar, scan = meshvar_scan_0d
-        # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["edge_node_connectivity"] = "node_lat"
+        # Add extra dims and a variable, to mimic edge-node connectivity.
+        # (which is not valid in a 0-d mesh)
+        scan.dimensions["edges"] = NcDimSummary(3)
+        scan.dimensions["edge_ends"] = NcDimSummary(2)
+        edgenodes_name = "fake_edge_nodes"
+        scan.variables[edgenodes_name] = NcVariableSummary(
+            name=edgenodes_name,
+            dimensions=["edges", "edge_ends"],
+            shape=(3, 2),
+            dtype=np.int32,
+        )
+        meshvar.attributes["edge_node_connectivity"] = edgenodes_name
         msg = (
             'has "topology_dimension=0", but the presence of.*'
             "'edge_node_connectivity'.*implies it should be 1."
@@ -444,7 +454,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r113_mesh_topologydim0_extra_faceconn(self, meshvar_scan_0d):
         meshvar, scan = meshvar_scan_0d
-        meshvar.attributes["face_node_connectivity"] = "node_lat"
+        # Add extra dims + a variable, to mimic face-node connectivity.
+        # (which is not valid in a 0-d mesh)
+        scan.dimensions["faces"] = NcDimSummary(3)
+        scan.dimensions["face_vertices"] = NcDimSummary(4)
+        facenodes_name = "fake_face_nodes"
+        scan.variables[facenodes_name] = NcVariableSummary(
+            name=facenodes_name,
+            dimensions=["faces", "face_vertices"],
+            shape=(3, 4),
+            dtype=np.int32,
+        )
+        meshvar.attributes["face_node_connectivity"] = facenodes_name
         msg = (
             'has "topology_dimension=0", but the presence of.*'
             "'face_node_connectivity'.*implies it should be 2."
@@ -453,7 +474,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r114_mesh_topologydim1_extra_boundsconn(self, meshvar_scan_1d):
         meshvar, scan = meshvar_scan_1d
-        meshvar.attributes["boundary_node_connectivity"] = "node_lat"
+        # Add extra dims and a variable, to mimic a bounds connectivity.
+        # (which is not valid in a 1-d mesh)
+        scan.dimensions["bounds"] = NcDimSummary(3)
+        scan.dimensions["bounds_ends"] = NcDimSummary(2)
+        boundnodes_name = "fake_bounds"
+        scan.variables[boundnodes_name] = NcVariableSummary(
+            name=boundnodes_name,
+            dimensions=["bounds", "bounds_ends"],
+            shape=(3, 2),
+            dtype=np.int32,
+        )
+        meshvar.attributes["boundary_node_connectivity"] = boundnodes_name
         msg = (
             'has a "boundary_node_connectivity".*'
             'there is no "face_node_connectivity"'
@@ -556,8 +588,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r119_mesh_faceface_no_faces(self, meshvar_scan_1d):
         meshvar, scan = meshvar_scan_1d
-        # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["face_face_connectivity"] = "node_lat"
+        # Add extra dims + a variable to mimic a 'face-face' connectivity.
+        # (which is not valid in a 1-d mesh)
+        scan.dimensions["faces"] = NcDimSummary(3)
+        scan.dimensions["face_N_faces"] = NcDimSummary(4)
+        faceface_name = "fake_face_faces"
+        scan.variables[faceface_name] = NcVariableSummary(
+            name=faceface_name,
+            dimensions=["faces", "face_N_faces"],
+            shape=(3, 4),
+            dtype=np.int32,
+        )
+        meshvar.attributes["face_face_connectivity"] = faceface_name
         msg = (
             'has a "face_face_connectivity".*'
             'there is no "face_node_connectivity"'
@@ -566,8 +608,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r120_mesh_faceedge_no_faces(self, meshvar_scan_1d):
         meshvar, scan = meshvar_scan_1d
-        # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["face_edge_connectivity"] = "node_lat"
+        # Add extra dims + a variable, to mimic face-edge connectivity.
+        # (which is not valid for a 1-d mesh)
+        scan.dimensions["faces"] = NcDimSummary(5)
+        scan.dimensions["face_N_edges"] = NcDimSummary(3)
+        faceedges_name = "fake_face_edges"
+        scan.variables[faceedges_name] = NcVariableSummary(
+            name=faceedges_name,
+            dimensions=["faces", "face_N_edges"],
+            shape=(5, 3),
+            dtype=np.int32,
+        )
+        meshvar.attributes["face_edge_connectivity"] = faceedges_name
         msg = (
             'has a "face_edge_connectivity".*'
             'there is no "face_node_connectivity"'
@@ -577,8 +629,17 @@ class TestChecker_MeshVariables(DatasetChecker):
     def test_r120_mesh_faceedge_no_edges(self, meshvar_scan_2d):
         meshvar, scan = meshvar_scan_2d
         meshvar = scan.variables["topology"]
-        # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["face_edge_connectivity"] = "node_lat"
+        # Add extra dims + a variable, to mimic face-edge connectivity.
+        # (which is not valid, as the mesh has no edges)
+        scan.dimensions["face_N_edges"] = NcDimSummary(3)
+        faceedges_name = "fake_face_edges"
+        scan.variables[faceedges_name] = NcVariableSummary(
+            name=faceedges_name,
+            dimensions=["faces", "face_N_edges"],
+            shape=(6, 3),
+            dtype=np.int32,
+        )
+        meshvar.attributes["face_edge_connectivity"] = faceedges_name
         msg = (
             'has a "face_edge_connectivity".*'
             'there is no "edge_node_connectivity"'
@@ -587,8 +648,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r121_mesh_edgeface_no_faces(self, meshvar_scan_1d):
         meshvar, scan = meshvar_scan_1d
-        # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["edge_face_connectivity"] = "node_lat"
+        # Add extra dims + a variable, to mimic edge-face connectivity.
+        # (which is not valid for a 1-d mesh)
+        scan.dimensions["edges"] = NcDimSummary(5)
+        scan.dimensions["edge_N_faces"] = NcDimSummary(3)
+        edgefaces_name = "fake_edge_faces"
+        scan.variables[edgefaces_name] = NcVariableSummary(
+            name=edgefaces_name,
+            dimensions=["edges", "edge_N_faces"],
+            shape=(5, 3),
+            dtype=np.int32,
+        )
+        meshvar.attributes["edge_face_connectivity"] = edgefaces_name
         msg = (
             'has a "edge_face_connectivity".*'
             'there is no "face_node_connectivity"'
@@ -597,8 +668,18 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     def test_r121_mesh_edgeface_no_edges(self, meshvar_scan_2d):
         meshvar, scan = meshvar_scan_2d
-        # This isn't a suitable target, but avoids a 'no such variable' error.
-        meshvar.attributes["edge_face_connectivity"] = "node_lat"
+        # Add extra dims + a variable, to mimic edge-face connectivity.
+        # (which is not valid as the mesh has no edges)
+        scan.dimensions["edges"] = NcDimSummary(5)
+        scan.dimensions["edge_N_faces"] = NcDimSummary(3)
+        edgefaces_name = "fake_edge_faces"
+        scan.variables[edgefaces_name] = NcVariableSummary(
+            name=edgefaces_name,
+            dimensions=["edges", "edge_N_faces"],
+            shape=(5, 3),
+            dtype=np.int32,
+        )
+        meshvar.attributes["edge_face_connectivity"] = edgefaces_name
         msg = (
             'has a "edge_face_connectivity".*'
             'there is no "edge_node_connectivity"'
@@ -723,3 +804,22 @@ class TestChecker_Coords(DatasetChecker):
             'node dimension is "num_node".'
         )
         self.check(scan, "R202", msg)
+
+    def test_a201_multiple_meshes(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        # Copy 'topology' mesh and all its components to make 'topology_2'
+        mesh2 = next_mesh(scan, "topology")
+        # Reference the old 'node_lon' variable in the new 'topology_2' mesh
+        assert mesh2.attributes["node_coordinates"] == "node_lat_2 node_lon_2"
+        mesh2.attributes["node_coordinates"] = "node_lat_2 node_lon"
+        msg = (
+            '"node_lon" is referenced by multiple mesh variables : '
+            "topology:node_coordinates, topology_2:node_coordinates."
+        )
+        # Note: we also get a the '2 meshes using 1 dim' error
+        # - this can't be avoided.
+        msg2 = (
+            'has dimension "num_node", but the parent mesh node dimension '
+            'is "num_node_2"'
+        )
+        self.check(scan, statements=[("A201", msg), ("R202", msg2)])

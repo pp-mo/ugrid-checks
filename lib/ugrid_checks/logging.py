@@ -1,6 +1,6 @@
 """Slightly crude, but ugrid-check-specific logging."""
 import logging
-from typing import List
+from typing import List, Union
 
 
 class UgridLogHandler(logging.Handler):
@@ -66,17 +66,23 @@ class CheckLoggingInterface:
         self._logger.log(level, msg, *args)
 
     @staticmethod
-    def _statement(vartype, var, msg):
+    def _statement(vartype: str, varname: str, msg: str):
         if vartype:
-            result = vartype + f' variable "{var.name}" '
-        elif var:
-            result = f'Variable "{var.name}" '
+            result = vartype + f' variable "{varname}" '
+        elif varname:
+            result = f'Variable "{varname}" '
         else:
             result = ""
         result += f"{msg}"
         return result
 
-    def state(self, statement: str, vartype, var, msg):
+    def state(
+        self,
+        statement: str,
+        vartype: Union[str, None],
+        varname: Union[str, None],
+        msg: str,
+    ):
         """
         Log a message relating to a given statement code.
 
@@ -90,6 +96,17 @@ class CheckLoggingInterface:
         * 'A' ("advise") codes log with logging.WARN.
         * '?' (informational) codes log with logging.INFO.
 
+        Parameters
+        ----------
+        statement : str
+            the code for the specific problem (a short string like "A103")
+        vartype : str or None
+            the 'role' of a variable which is the focus of the problem (if any)
+        varname : str or None
+            the name of a variable which is the focus of the problem (if any)
+        msg : str
+            a description of the problem
+
         """
         assert len(statement) >= 1
         statement_type = statement[0]
@@ -102,19 +119,19 @@ class CheckLoggingInterface:
             # For messages with a 'REQUIRE' type code.
             self.N_FAILURES += 1
             msg = f"*** FAIL R{statement_num:03d} : " + self._statement(
-                vartype, var, msg
+                vartype, varname, msg
             )
             self.report(msg, logging.ERROR, statement_num)
         elif statement_type == "A":
             # For messages with an 'ADVISE' type code.
             self.N_WARNINGS += 1
             msg = f"... WARN A{statement_num:03d} : " + self._statement(
-                vartype, var, msg
+                vartype, varname, msg
             )
             self.report(msg, logging.WARN, statement_num)
         elif statement_type == "?":
             # For messages which don't have a code assigned.
-            self.report(self._statement(vartype, var, msg))
+            self.report(self._statement(vartype, varname, msg))
 
     def printonly(self, msg, *args):
         """
