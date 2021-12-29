@@ -321,15 +321,17 @@ class Checker:
             meshvar to check
 
         """
-        referring_var_name = self._mesh_referrers.get(meshvar.name)
+
+        def log_meshvar(code, msg):
+            LOG.state(code, "Mesh", meshvar.name, msg)
 
         # First check for bad 'cf_role' :
         # if wrong, meshvar can only have been identified by reference.
         cfrole_prop = meshvar.attributes.get("cf_role", None)
         if cfrole_prop != "mesh_topology":
-            assert referring_var_name is not None
             # This variable does not have the expected 'cf_role', so if we are
             # checking it, it must be referred to as 'mesh' by some variable.
+            referring_var_name = self._mesh_referrers[meshvar.name]
             # Either there is no 'cf_role', or it is "wrong".
             msg = (
                 f"appears to be a mesh, "
@@ -343,6 +345,7 @@ class Checker:
                 msg += f'a "cf_role" of "{cfrole_prop}",'
                 errcode = "R102"
             msg += " which should be 'mesh_topology'."
+            # N.B. do not identify as a Mesh, statement just says "variable"
             LOG.state(errcode, "", meshvar.name, msg)
             # Also, if the 'cf_role' was something else, then check it is a
             # valid option + emit an additional message if needed.
@@ -352,29 +355,23 @@ class Checker:
                     "which is not a valid UGRID cf_role."
                 )
                 # "R102.a"
-                LOG.state("?", "Mesh", meshvar.name, msg)
+                log_meshvar("?", msg)
 
         # Check all other attributes of mesh vars.
         topology_dimension = meshvar.attributes.get("topology_dimension")
         if topology_dimension is None:
-            LOG.state(
-                "R103", "Mesh", meshvar.name, 'has no "topology_dimension".'
-            )
+            log_meshvar("R103", 'has no "topology_dimension".')
         else:
             # Check the topology dimension.
             # In principle, this controls which other connectivity properties
             # may appear : In practice, it is better to parse those
             # independently, and then cross-check.
             if topology_dimension not in (0, 1, 2):
-                LOG.state(
-                    "R104",
-                    "Mesh",
-                    meshvar.name,
-                    (
-                        f'has "topology_dimension={topology_dimension}", '
-                        "which is not 0, 1 or 2."
-                    ),
+                msg = (
+                    f'has "topology_dimension={topology_dimension}", '
+                    "which is not 0, 1 or 2."
                 )
+                log_meshvar("R104", msg)
                 # Handle this subsequently as if it was missing
                 topology_dimension = None
 
@@ -433,7 +430,7 @@ class Checker:
                         f"but it has no '{toplogy_required_attribute}' "
                         f"attribute."
                     )
-                LOG.state(errcode, "Mesh", meshvar.name, msg)
+                log_meshvar(errcode, msg)
 
         # We will use the 'calculated' one to scope any remaining checks.
         # TODO: remove this, if it continues to be unused.
@@ -446,15 +443,12 @@ class Checker:
             if not ok:
                 value = meshvar.attributes.get(attr, "")
                 is_conn = attr in _VALID_CONNECTIVITY_ROLES
-                LOG.state(
-                    "R108" if is_conn else "R107",
-                    "Mesh",
-                    meshvar.name,
-                    (
-                        f'attribute "{attr}" = "{value}", which is not a list '
-                        "of variables in the dataset."
-                    ),
+                errcode = "R108" if is_conn else "R107"
+                msg = (
+                    f'attribute "{attr}" = "{value}", which is not a list '
+                    "of variables in the dataset."
                 )
+                log_meshvar(errcode, msg)
 
         # Work out the actual mesh dimensions.
         mesh_dims = {
@@ -463,11 +457,8 @@ class Checker:
         self._all_mesh_dims[meshvar.name] = mesh_dims
 
         if "node_coordinates" not in meshvar.attributes:
-            LOG.state(
-                "R109",
-                "Mesh",
-                meshvar.name,
-                "does not have a 'node_coordinates' attribute.",
+            log_meshvar(
+                "R109", "does not have a 'node_coordinates' attribute."
             )
         else:
             # Note: if a 'node_coordinates' attribute exists, then we already
@@ -496,41 +487,33 @@ class Checker:
                 if dimension_name:
                     dimension_name = None
                     # "A105 ?"
-                    LOG.state(
-                        "?",
-                        "Mesh",
-                        meshvar.name,
-                        (
-                            f'has an attribute "{dimattr_name}", which is not '
-                            "a valid UGRID term, and may be "
-                            'a mistake (ADVISORY)."'
-                        ),
+                    msg = (
+                        f'has an attribute "{dimattr_name}", which is not '
+                        "a valid UGRID term, and may be "
+                        'a mistake (ADVISORY)."'
                     )
+                    log_meshvar("?", msg)
                     # TODO: add ADVISE code for this ?
 
             if dimension_name:
                 # There is an explicit 'xxx_dimension' property.
                 if connattr_name not in meshvar.attributes:
                     # "A106 ?"
-                    LOG.state(
-                        "?",
-                        "Mesh",
-                        meshvar.name,
+                    msg = (
                         f'has an attribute "{dimattr_name}", '
                         "which is not valid "
                         f'since there is no "{connattr_name}".',
                     )
+                    log_meshvar("?", msg)
                 elif dimension_name in self.file_scan.dimensions:
                     mesh_dims[location] = dimension_name
                 else:
                     errcode = {"edge": "R115", "face": "R117"}[location]
-                    LOG.state(
-                        errcode,
-                        "Mesh",
-                        meshvar.name,
+                    msg = (
                         f'has {dimattr_name}="{dimension_name}", which is not '
                         "a dimension in the dataset.",
                     )
+                    log_meshvar(errcode, msg)
             elif connattr_name in meshvar.attributes:
                 # No "xxx_dimension" attribute, but we *do* have
                 # "xxx_node_connectivity", so mesh does _have_ this location.
@@ -587,7 +570,7 @@ class Checker:
                 f"{location} connectivities "
                 f"with non-standard dimension order : {conn_names_str}."
             )
-            LOG.state(errcode, "Mesh", meshvar.name, msg)
+            log_meshvar(errcode, msg)
 
         # Check that all existing coordinates are valid.
         for coords_name in _VALID_MESHCOORD_ATTRS:
@@ -624,7 +607,7 @@ class Checker:
                     )
                     err_msg += "or ".join(missing_elements)
                     err_msg += " attribute present."
-                    LOG.state(errcode, "Mesh", meshvar.name, err_msg)
+                    log_meshvar(errcode, err_msg)
 
         check_requires("R114", "boundary_node_connectivity", "face")
         check_requires("R119", "face_face_connectivity", "face")
@@ -633,16 +616,11 @@ class Checker:
 
         # Advisory checks.
         if meshvar.dimensions:
-            LOG.state("A101", "Mesh", meshvar.name, "has dimensions.")
+            log_meshvar("A101", "has dimensions.")
         if "standard_name" in meshvar.attributes:
-            LOG.state(
-                "A102",
-                "Mesh",
-                meshvar.name,
-                'has a "standard_name" attribute.',
-            )
+            log_meshvar("A102", 'has a "standard_name" attribute.')
         if "units" in meshvar.attributes:
-            LOG.state("A103", "Mesh", meshvar.name, 'has a "units" attribute.')
+            log_meshvar("A103", 'has a "units" attribute.')
         # NOTE: "A104" relates to multiple meshvars, so is handled in caller.
 
         return mesh_dims
