@@ -172,17 +172,17 @@ class Checker:
 
         if has_bounds:
             # NB from the above check, we do have a bounds variable.
-            bounds_var = self._all_vars[bounds_name]
+            bounds_var = self._all_vars[str(bounds_name)]
             bounds_dims = bounds_var.dimensions
             (coord_dim,) = coord.dimensions  # NB always has exactly 1
             if coord_dim not in bounds_dims:
                 msg = (
                     f"has dimensions {bounds_dims!r}, which does not include "
-                    f"the parent variable dimension, {coord_dim}."
+                    f'the parent variable dimension, "{coord_dim}".'
                 )
                 log_bounds_statement("R203", msg)
 
-            n_bounds_dims = bounds_dims
+            n_bounds_dims = len(bounds_dims)
             if n_bounds_dims != 2:
                 msg = (
                     f"has dimensions {bounds_dims!r}, of which there should "
@@ -190,13 +190,9 @@ class Checker:
                 )
                 log_bounds_statement("R203", msg)
 
-            # Do the data-values check.  This is potentially costly.
-            if self.do_data_checks:
-                # TODO: enable data-value checks by attaching lazy data arrays
-                # to scan variables.
-                assert bounds_var.data is not None
-                raise ValueError("Not ready for data-value checks.")
-                log_bounds_statement("A205", "???")
+            #
+            # Advisory checks
+            #
 
             def check_attr_mismatch(attr_name):
                 coord_attr, bounds_attr = [
@@ -204,6 +200,8 @@ class Checker:
                     for var in (coord, bounds_var)
                 ]
                 if bounds_attr is not None and bounds_attr != coord_attr:
+                    if coord_attr is None:
+                        coord_attr = "<none>"
                     msg = (
                         f'has {attr_name}="{bounds_attr}", which does not '
                         f'match the parent {attr_name} of "{coord_attr}".'
@@ -212,6 +210,14 @@ class Checker:
 
             check_attr_mismatch("standard_name")
             check_attr_mismatch("units")
+
+            # Do the data-values check.  This is potentially costly.
+            if self.do_data_checks:
+                # TODO: enable data-value checks by attaching lazy data arrays
+                # to scan variables.
+                assert bounds_var.data is not None
+                raise ValueError("Not ready for data-value checks.")
+                log_bounds_statement("A205", "???")
 
         return result_codes_and_messages
 
@@ -779,6 +785,9 @@ class Checker:
         for some_varname, meshes_and_attrs in var_refs_meshes_attrs.items():
             some_var = self._all_vars[some_varname]  # NB have only 'real' refs
             if len(meshes_and_attrs) > 1:
+                meshes_and_attrs = sorted(
+                    meshes_and_attrs, key=lambda pair: pair[0]
+                )
                 refs_msg = ", ".join(
                     [
                         f"{some_mesh}:{attr_name}"
