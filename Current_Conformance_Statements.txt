@@ -49,18 +49,18 @@ connectivity variable
 - <a id="R305" href="#R305">R305</a> one is an element dimension of its parent mesh, and
 - <a id="R306" href="#R306">R306</a> the other is not an element dimension
 - <a id="R307" href="#R307">R307</a> its element dimension must be that of the _first_ location named in its `cf_role`
-- <a id="R308" href="#R308">R308</a> if it has a `cf_role` of `edge_node_connectivity` or `boundary_node_connectivity`,
+- <a id="R308" href="#R308">R308</a> if it has a `cf_role` of `edge_node_connectivity` or `boundary_node_connectivity`,  then its non-element dimension must have length 2
 - <a id="R309" href="#R309">R309</a> any `start_index` attribute must have one of the values (0, 1).
-- <a id="R310" href="#R310">R310</a> if it has a `cf_role` ending in `_node_connectivity`,
+- <a id="R310" href="#R310">R310</a> if it has a `cf_role` ending in `_node_connectivity`, , then it must not contain any 'missing' indices
 ---
 - <a id="A301" href="#A301">A301</a> it should have _one and only one_ parent mesh [^1]
 - <a id="A302" href="#A302">A302</a> it should have an integral type
 - <a id="A303" href="#A303">A303</a> any `start_index` attribute should have the same type as the connectivity variable itself
-- <a id="A304" href="#A304">A304</a> if it has a `cf_role` ending in `_node_connectivity`,
+- <a id="A304" href="#A304">A304</a> if it has a `cf_role` ending in `_node_connectivity`, , then it should not have a _FillValue attribute
 - <a id="A305" href="#A305">A305</a> if it contains any "missing" indices, then it should have a `_FillValue` attribute :
-- <a id="A306" href="#A306">A306</a> it should have the same type as the connectivity variable itself, and
-- <a id="A307" href="#A307">A307</a> it should have a negative value
-- <a id="A308" href="#A308">A308</a> all its non-missing values should be valid indices into the relevant dimension of
+- <a id="A306" href="#A306">A306</a> any "_FillValue" should have the same type as the connectivity variable itself, and
+- <a id="A307" href="#A307">A307</a> any "_FillValue" should have a negative value
+- <a id="A308" href="#A308">A308</a> all its non-missing values should be valid indices into the relevant dimension of the parent mesh, i.e. the second location named in the cf_role
 
 location index set variable
 - <a id="R401" href="#R401">R401</a> it must have a `cf_role` attribute with the value `"location_index_set"`

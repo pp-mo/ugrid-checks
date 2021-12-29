@@ -31,3 +31,6 @@ Add an advisory that different dims are used for different locations.
      == each location of each mesh has its _own_ unique dimension
  - TODO: checks.py code support
 
+Add an advisory that ALL vars should have only known-allowed "cf_role"
+
+Add an advisory that

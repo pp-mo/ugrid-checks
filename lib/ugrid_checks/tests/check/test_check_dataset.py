@@ -805,7 +805,154 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, "R202", msg)
 
-    def test_a201_multiple_meshes(self, coordvar_scan_2d):
+    def test_r203_coord_bounds_multiple_names(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        # Add an invalid bounds attribute to the node_lon coord.
+        coord.attributes["bounds"] = "a b"
+        msg = (
+            '"node_lon" within topology:node_coordinates has bounds "a b", '
+            "which is not a single variable"
+        )
+        self.check(scan, "R203", msg)
+
+    def test_r203_coord_bounds_bad_name(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        # Add an invalid bounds attribute to the node_lon coord.
+        coord.attributes["bounds"] = "$123"
+        msg = (
+            r'"node_lon" within topology:node_coordinates has bounds "\$123", '
+            "which is not a valid netcdf variable name"
+        )
+        self.check(scan, "R203", msg)
+
+    def test_r203_coord_bounds_missing_var(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        # Add an invalid bounds attribute to the node_lon coord.
+        coord.attributes["bounds"] = "other_var"
+        msg = (
+            '"node_lon" within topology:node_coordinates has '
+            'bounds "other_var", which is not a variable in the dataset'
+        )
+        self.check(scan, "R203", msg)
+
+    def test_r203_coord_bounds_missing_element_dim(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        # Add node-lon bounds, with inappropriate dims.
+        scan.dimensions["extra1"] = NcDimSummary(3)
+        scan.dimensions["extra2"] = NcDimSummary(2)
+        nodelon_bds_name = "node_lons_bounds"
+        scan.variables[nodelon_bds_name] = NcVariableSummary(
+            name=nodelon_bds_name,
+            dimensions=("extra1", "extra2"),
+            shape=(3, 2),
+            dtype=coord.dtype,
+        )
+        coord.attributes["bounds"] = nodelon_bds_name
+        msg = (
+            r"dimensions \('extra1', 'extra2'\).*"
+            'does not include the parent variable dimension, "num_node".'
+        )
+        self.check(scan, "R203", msg)
+
+    def test_r203_coord_bounds_bad_ndims(self, scan_2d_mesh):
+        coord = scan_2d_mesh.variables["longitude"]
+        # Add node-lon bounds, with wrong n-dims (but does include the parent).
+        facelons_bds_name = "face_lons_bounds"
+        scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
+            name=facelons_bds_name,
+            dimensions=("face_dim",),
+            shape=(6,),
+            dtype=coord.dtype,
+        )
+        coord.attributes["bounds"] = facelons_bds_name
+        msg = r"dimensions \('face_dim',\).* should be 2, instead of 1\."
+        self.check(scan_2d_mesh, "R203", msg)
+
+    def test_r203_coord_bounds_stdname_clash(self, scan_2d_mesh):
+        coord = scan_2d_mesh.variables["longitude"]
+        # Add node-lon bounds, with wrong n-dims (but does include the parent).
+        facelons_bds_name = "face_lons_bounds"
+        scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
+            name=facelons_bds_name,
+            dimensions=("face_dim", "num_vertices"),
+            shape=(6,),
+            dtype=coord.dtype,
+            attributes={"standard_name": "junk"},
+        )
+        coord.attributes["bounds"] = facelons_bds_name
+        msg = (
+            'standard_name="junk", which does not match the parent '
+            r'standard_name of "longitude"\.'
+        )
+        self.check(scan_2d_mesh, "R203", msg)
+
+    def test_r203_coord_bounds_stdname_noparentstdname(self, scan_2d_mesh):
+        coord = scan_2d_mesh.variables["longitude"]
+        # Add node-lon bounds, with wrong n-dims (but does include the parent).
+        facelons_bds_name = "face_lons_bounds"
+        scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
+            name=facelons_bds_name,
+            dimensions=("face_dim", "num_vertices"),
+            shape=(6,),
+            dtype=coord.dtype,
+            attributes={"standard_name": coord.attributes["standard_name"]},
+        )
+        coord.attributes["bounds"] = facelons_bds_name
+        # Fix so the bounds has a standard-name, but the parent does not
+        del coord.attributes["standard_name"]
+        msg = (
+            'standard_name="longitude", which does not match the parent '
+            r'standard_name of "<none>"\.'
+        )
+        # N.B. this causes an additional A203 statement, which can't be avoided
+        msg2 = 'coordinate.* "longitude".* has no "standard_name"'
+        self.check(scan_2d_mesh, statements=[("R203", msg), ("A203", msg2)])
+
+    def test_r203_coord_bounds_units_clash(self, scan_2d_mesh):
+        coord = scan_2d_mesh.variables["longitude"]
+        # Add node-lon bounds, with wrong n-dims (but does include the parent).
+        facelons_bds_name = "face_lons_bounds"
+        scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
+            name=facelons_bds_name,
+            dimensions=("face_dim", "num_vertices"),
+            shape=(6,),
+            dtype=coord.dtype,
+            attributes={"units": "junk"},
+        )
+        coord.attributes["bounds"] = facelons_bds_name
+        msg = (
+            'units="junk", which does not match the parent '
+            r'units of "degrees_east"\.'
+        )
+        self.check(scan_2d_mesh, "R203", msg)
+
+    def test_r203_coord_bounds_units_noparentunits(self, scan_2d_mesh):
+        coord = scan_2d_mesh.variables["longitude"]
+        # Add node-lon bounds, with wrong n-dims (but does include the parent).
+        facelons_bds_name = "face_lons_bounds"
+        scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
+            name=facelons_bds_name,
+            dimensions=("face_dim", "num_vertices"),
+            shape=(6,),
+            dtype=coord.dtype,
+            attributes={"units": "degrees_east"},
+        )
+        coord.attributes["bounds"] = facelons_bds_name
+        # Fix so the bounds has a standard-name, but the parent does not
+        del coord.attributes["units"]
+        msg = (
+            'units="degrees_east", which does not match the parent '
+            r'units of "<none>"\.'
+        )
+        # N.B. this causes an additional A204 statement, which can't be avoided
+        msg2 = 'coordinate.* "longitude".* has no "units" attribute'
+        self.check(scan_2d_mesh, statements=[("R203", msg), ("A204", msg2)])
+
+    #
+    # Advisory warnings
+    #
+
+    def test_a201_coord_multiple_meshes(self, coordvar_scan_2d):
         scan, coord = coordvar_scan_2d
         # Copy 'topology' mesh and all its components to make 'topology_2'
         mesh2 = next_mesh(scan, "topology")
@@ -816,10 +963,33 @@ class TestChecker_Coords(DatasetChecker):
             '"node_lon" is referenced by multiple mesh variables : '
             "topology:node_coordinates, topology_2:node_coordinates."
         )
-        # Note: we also get a the '2 meshes using 1 dim' error
+        # Note: we also get a '2 meshes using 1 dim' error
         # - this can't be avoided.
         msg2 = (
             'has dimension "num_node", but the parent mesh node dimension '
             'is "num_node_2"'
         )
         self.check(scan, statements=[("A201", msg), ("R202", msg2)])
+
+    def test_a202_coord_not_floating_point(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        coord.dtype = np.dtype(np.int32)
+        msg = (
+            'variable "node_lon" within topology:node_coordinates has a '
+            r"dtype which is not floating-point : int32\."
+        )
+        self.check(scan, "A202", msg)
+
+    def test_a203_coord_no_stdname(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        del coord.attributes["standard_name"]
+        msg = 'has no "standard_name" attribute'
+        self.check(scan, "A203", msg)
+
+    def test_a204_coord_no_units(self, coordvar_scan_2d):
+        scan, coord = coordvar_scan_2d
+        del coord.attributes["units"]
+        msg = 'has no "units" attribute'
+        self.check(scan, "A204", msg)
+
+    # A205 : bounds data matching expected -- not yet implemented
