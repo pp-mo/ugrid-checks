@@ -32,6 +32,9 @@ Add an advisory that different dims are used for different locations.
  - TODO: checks.py code support
 
 Add an advisory that ALL vars should have only known-allowed "cf_role"
+ = "A905"
+    ("timeseries_id" , "profile_id" , "trajectory_id")
+    These are discrete geometry structure types
 
 Add an advisory that
 
