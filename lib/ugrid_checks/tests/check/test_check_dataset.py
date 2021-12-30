@@ -271,26 +271,26 @@ class TestChecker_Dataset(DatasetChecker):
 class TestChecker_MeshVariables(DatasetChecker):
     # Simplified fixtures, when the meshvar is what is wanted.
     @fixture
-    def meshvar_scan_2d(self, scan_2d_mesh):
-        return scan_2d_mesh.variables["topology"], scan_2d_mesh
+    def scan_2d_and_meshvar(self, scan_2d_mesh):
+        return scan_2d_mesh, scan_2d_mesh.variables["topology"]
 
     @fixture
-    def meshvar_scan_1d(self, scan_1d_mesh):
-        return scan_1d_mesh.variables["topology"], scan_1d_mesh
+    def scan_1d_and_meshvar(self, scan_1d_mesh):
+        return scan_1d_mesh, scan_1d_mesh.variables["topology"]
 
     @fixture
-    def meshvar_scan_0d(self, scan_0d_mesh):
-        return scan_0d_mesh.variables["topology"], scan_0d_mesh
+    def scan_0d_and_meshvar(self, scan_0d_mesh):
+        return scan_0d_mesh, scan_0d_mesh.variables["topology"]
 
     # Test mesh-variable checking.
-    def test_r101_mesh_missing_cf_role(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r101_mesh_missing_cf_role(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         del meshvar.attributes["cf_role"]
         msg = "no \"cf_role\" property, which should be 'mesh_topology'"
         self.check(scan, "R101", msg)
 
-    def test_r102_mesh_bad_cf_role(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r102_mesh_bad_cf_role(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["cf_role"] = "something odd"
         self.check(
             scan,
@@ -303,18 +303,18 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r103_mesh_no_topology_dimension(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r103_mesh_no_topology_dimension(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         del meshvar.attributes["topology_dimension"]
         self.check(scan, "R103", 'no "topology_dimension"')
 
-    def test_r104_mesh_unknown_topology_dimension(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r104_mesh_unknown_topology_dimension(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["topology_dimension"] = 4
         self.check(scan, "R104", "not 0, 1 or 2")
 
-    def test_r105_r107_mesh_badcoordattr_nonstring(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r105_r107_mesh_badcoordattr_nonstring(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         # An invalid mesh-coord attribute.
         # This is always caused by a subsidiary specific error, so for testing
         # it doesn't much matter which we choose.
@@ -333,8 +333,8 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_empty(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r105_r107_mesh_badcoordattr_empty(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = ""
         self.check(
             scan,
@@ -350,8 +350,10 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_invalidname(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r105_r107_mesh_badcoordattr_invalidname(
+        self, scan_2d_and_meshvar
+    ):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = "$123"
         self.check(
             scan,
@@ -367,8 +369,8 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_missingvar(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r105_r107_mesh_badcoordattr_missingvar(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = "$123"
         self.check(
             scan,
@@ -384,8 +386,8 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r108_mesh_badconn_empty(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r108_mesh_badconn_empty(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         # Checking the catchall error for an invalid mesh-coord attribute.
         # This is always caused by a subsidiary specific error, so for testing
         # it doesn't much matter which we choose.
@@ -410,8 +412,8 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r108a_mesh_badconn_multiplevars(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r108a_mesh_badconn_multiplevars(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         # Checking for multiple entries in a connectivity attribute.
         # Create extra custom variables, copying 'node_lat'
         next_var(scan, "node_lat")
@@ -425,14 +427,14 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self.check(scan, "", msg)
 
-    def test_r109_mesh_missing_node_coords(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r109_mesh_missing_node_coords(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         del meshvar.attributes["node_coordinates"]
         msg = "does not have a 'node_coordinates' attribute"
         self.check(scan, "R109", msg)
 
-    def test_r110_mesh_topologydim0_extra_edgeconn(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_r110_mesh_topologydim0_extra_edgeconn(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         # Add extra dims and a variable, to mimic edge-node connectivity.
         # (which is not valid in a 0-d mesh)
         scan.dimensions["edges"] = NcDimSummary(3)
@@ -452,8 +454,10 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self.check(scan, "R110", msg)
 
-    def test_r111_mesh_topologydim1_missing_edgeconn(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r111_mesh_topologydim1_missing_edgeconn(
+        self, scan_1d_and_meshvar
+    ):
+        scan, meshvar = scan_1d_and_meshvar
         del meshvar.attributes["edge_node_connectivity"]
         # Also remove this, just to avoid an additional error
         del meshvar.attributes["edge_dimension"]
@@ -462,14 +466,16 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     # NOTE: R112 is to be removed
 
-    def test_r113_mesh_topologydim2_missing_faceconn(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r113_mesh_topologydim2_missing_faceconn(
+        self, scan_1d_and_meshvar
+    ):
+        scan, meshvar = scan_1d_and_meshvar
         meshvar.attributes["topology_dimension"] = 2
         msg = 'has "topology_dimension=2", but.*' "no 'face_node_connectivity'"
         self.check(scan, "R113", msg)
 
-    def test_r113_mesh_topologydim0_extra_faceconn(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_r113_mesh_topologydim0_extra_faceconn(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         # Add extra dims + a variable, to mimic face-node connectivity.
         # (which is not valid in a 0-d mesh)
         scan.dimensions["faces"] = NcDimSummary(3)
@@ -489,8 +495,10 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self.check(scan, "R113", msg)
 
-    def test_r114_mesh_topologydim1_extra_boundsconn(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r114_mesh_topologydim1_extra_boundsconn(
+        self, scan_1d_and_meshvar
+    ):
+        scan, meshvar = scan_1d_and_meshvar
         # Add extra dims and a variable, to mimic a bounds connectivity.
         # (which is not valid in a 1-d mesh)
         scan.dimensions["bounds"] = NcDimSummary(3)
@@ -521,22 +529,22 @@ class TestChecker_MeshVariables(DatasetChecker):
         ]
         self.check(scan, statements=statements)
 
-    def test_r115_mesh_edgedim_unknown(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r115_mesh_edgedim_unknown(self, scan_1d_and_meshvar):
+        scan, meshvar = scan_1d_and_meshvar
         meshvar.attributes["edge_dimension"] = "unknown_dim"
         msg = 'edge_dimension="unknown_dim".* not a dimension'
         self._check_w_r305(scan, "R115", msg)
 
-    def test_r117_mesh_facedim_unknown(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r117_mesh_facedim_unknown(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["face_dimension"] = "unknown_dim"
         msg = 'face_dimension="unknown_dim".* not a dimension'
         self._check_w_r305(scan, "R117", msg)
 
-    def test_r116_mesh_missing_needed_edgedim(self, meshvar_scan_2d):
+    def test_r116_mesh_missing_needed_edgedim(self, scan_2d_and_meshvar):
         # Check that, if some edge connectivities have a non-standard dim
         # order, we then require an edge-dim attribute.
-        meshvar, scan = meshvar_scan_2d
+        scan, meshvar = scan_2d_and_meshvar
 
         # First add edges and a face-edges map to the 2d mesh
         # (because there are no optional edge connectivities in a 1d mesh)
@@ -582,10 +590,10 @@ class TestChecker_MeshVariables(DatasetChecker):
         meshvar.attributes["edge_dimension"] = "edge_dim"
         self.check(scan)
 
-    def test_r118_mesh_missing_needed_facedim_2(self, meshvar_scan_2d):
+    def test_r118_mesh_missing_needed_facedim_2(self, scan_2d_and_meshvar):
         # Check that, if some edge connectivities have a non-standard dim
         # order, we then require an edge-dim attribute.
-        meshvar, scan = meshvar_scan_2d
+        scan, meshvar = scan_2d_and_meshvar
 
         # Add a face-face map to the 2d mesh
         faceface_name = "face_face_var"
@@ -618,8 +626,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         meshvar.attributes["face_dimension"] = "face_dim"
         self.check(scan)
 
-    def test_r119_mesh_faceface_no_faces(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r119_mesh_faceface_no_faces(self, scan_1d_and_meshvar):
+        scan, meshvar = scan_1d_and_meshvar
         # Add extra dims + a variable to mimic a 'face-face' connectivity.
         # (which is not valid in a 1-d mesh)
         scan.dimensions["faces"] = NcDimSummary(3)
@@ -639,8 +647,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self._check_w_r305(scan, "R119", msg)
 
-    def test_r120_mesh_faceedge_no_faces(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r120_mesh_faceedge_no_faces(self, scan_1d_and_meshvar):
+        scan, meshvar = scan_1d_and_meshvar
         # Add extra dims + a variable, to mimic face-edge connectivity.
         # (which is not valid for a 1-d mesh)
         scan.dimensions["faces"] = NcDimSummary(5)
@@ -660,8 +668,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self._check_w_r305(scan, "R120", msg)
 
-    def test_r120_mesh_faceedge_no_edges(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r120_mesh_faceedge_no_edges(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar = scan.variables["topology"]
         # Add extra dims + a variable, to mimic face-edge connectivity.
         # (which is not valid, as the mesh has no edges)
@@ -681,8 +689,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self._check_w_r305(scan, "R120", msg)
 
-    def test_r121_mesh_edgeface_no_faces(self, meshvar_scan_1d):
-        meshvar, scan = meshvar_scan_1d
+    def test_r121_mesh_edgeface_no_faces(self, scan_1d_and_meshvar):
+        scan, meshvar = scan_1d_and_meshvar
         # Add extra dims + a variable, to mimic edge-face connectivity.
         # (which is not valid for a 1-d mesh)
         scan.dimensions["edges"] = NcDimSummary(5)
@@ -702,8 +710,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self._check_w_r305(scan, "R121", msg)
 
-    def test_r121_mesh_edgeface_no_edges(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_r121_mesh_edgeface_no_edges(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         # Add extra dims + a variable, to mimic edge-face connectivity.
         # (which is not valid as the mesh has no edges)
         scan.dimensions["edges"] = NcDimSummary(5)
@@ -723,14 +731,14 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self._check_w_r305(scan, "R121", msg)
 
-    def test_a101_mesh_variable_dimensions(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_a101_mesh_variable_dimensions(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         meshvar.dimensions = ["num_node"]
         meshvar.shape = (8,)  # to make consistent, but probably unnecessary?
         self.check(scan, "A101", 'Mesh variable "topology" has dimensions')
 
-    def test_a102_mesh_variable_stdname(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_a102_mesh_variable_stdname(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         meshvar.attributes["standard_name"] = "air_temperature"
         self.check(
             scan,
@@ -738,8 +746,8 @@ class TestChecker_MeshVariables(DatasetChecker):
             'Mesh variable "topology" has a "standard_name" attribute',
         )
 
-    def test_a103_mesh_variable_units(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_a103_mesh_variable_units(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         meshvar.attributes["units"] = "K"
         self.check(
             scan,
@@ -749,8 +757,8 @@ class TestChecker_MeshVariables(DatasetChecker):
 
     # Note: A104 is tested in TestChecker_Dataset
 
-    def test_a105_mesh_invalid_boundarydim(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_a105_mesh_invalid_boundarydim(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["boundary_dimension"] = "odd_name"
         msg = (
             'has an attribute "boundary_dimension", which is '
@@ -758,8 +766,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self.check(scan, "", msg)  # TODO: will be "A105"
 
-    def test_a105_mesh_invalid_nodedim(self, meshvar_scan_2d):
-        meshvar, scan = meshvar_scan_2d
+    def test_a105_mesh_invalid_nodedim(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_dimension"] = "odd_name"
         msg = (
             'has an attribute "node_dimension", which is '
@@ -767,8 +775,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         self.check(scan, "", msg)  # TODO: will be "A105"
 
-    def test_a106_mesh_unwanted_edgedim(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_a106_mesh_unwanted_edgedim(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         meshvar.attributes["edge_dimension"] = "odd_name"
         msg = (
             'has an attribute "edge_dimension", which is not valid.*'
@@ -777,8 +785,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         #  TODO: will be "A106" -- or possibly "Rxxx" ?
         self.check(scan, "", msg)
 
-    def test_a106_mesh_unwanted_facedim(self, meshvar_scan_0d):
-        meshvar, scan = meshvar_scan_0d
+    def test_a106_mesh_unwanted_facedim(self, scan_0d_and_meshvar):
+        scan, meshvar = scan_0d_and_meshvar
         meshvar.attributes["face_dimension"] = "odd_name"
         msg = (
             'has an attribute "face_dimension", which is not valid.*'
@@ -790,17 +798,17 @@ class TestChecker_MeshVariables(DatasetChecker):
 
 class TestChecker_DataVariables(DatasetChecker):
     @fixture
-    def datavar_scan_2d(self, scan_2d_mesh):
+    def scan_2d_and_datavar(self, scan_2d_mesh):
         return scan_2d_mesh, scan_2d_mesh.variables["sample_data"]
 
     # Test data-variable checking.
-    def test_r502_datavar_nonexistent_mesh(self, datavar_scan_2d):
-        scan, datavar = datavar_scan_2d
+    def test_r502_datavar_nonexistent_mesh(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = "other_mesh"
         self.check(scan, "R502", 'no "other_mesh" variable')
 
-    def test_r502_datavar_bad_mesh_name(self, datavar_scan_2d):
-        scan, datavar = datavar_scan_2d
+    def test_r502_datavar_bad_mesh_name(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = "this that other"
         msg = (
             "\"mesh='this that other'\", "
@@ -808,14 +816,14 @@ class TestChecker_DataVariables(DatasetChecker):
         )
         self.check(scan, "R502", msg)
 
-    def test_r502_datavar_empty_mesh_name(self, datavar_scan_2d):
-        scan, datavar = datavar_scan_2d
+    def test_r502_datavar_empty_mesh_name(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = ""
         msg = "\"mesh=''\", which is not a valid variable name."
         self.check(scan, "R502", msg)
 
-    def test_r502_datavar_missing_meshvar(self, datavar_scan_2d):
-        scan, datavar = datavar_scan_2d
+    def test_r502_datavar_missing_meshvar(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = "absent"
         msg = "mesh='absent'.*but there is no \"absent\" variable"
         self.check(scan, "R502", msg)
@@ -823,18 +831,18 @@ class TestChecker_DataVariables(DatasetChecker):
 
 class TestChecker_Coords(DatasetChecker):
     @fixture
-    def coordvar_scan_2d(self, scan_2d_mesh):
+    def scan_2d_and_coordvar(self, scan_2d_mesh):
         return scan_2d_mesh, scan_2d_mesh.variables["node_lon"]
 
     # Test mesh-coordinate checking.
-    def test_r201_coord_multidim(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_r201_coord_multidim(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         coord.dimensions = coord.dimensions + ("num_vertices",)
         msg = '"node_lon".*one dimension.*has 2 dimensions'
         self.check(scan, "R201", msg)
 
-    def test_r202_coord_wrongdim(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_r202_coord_wrongdim(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         coord.dimensions = ("face_dim",)
         msg = (
             'dimension "face_dim", but the parent mesh '
@@ -842,8 +850,8 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, "R202", msg)
 
-    def test_r203_coord_bounds_multiple_names(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_r203_coord_bounds_multiple_names(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         # Add an invalid bounds attribute to the node_lon coord.
         coord.attributes["bounds"] = "a b"
         msg = (
@@ -852,8 +860,8 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, "R203", msg)
 
-    def test_r203_coord_bounds_bad_name(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_r203_coord_bounds_bad_name(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         # Add an invalid bounds attribute to the node_lon coord.
         coord.attributes["bounds"] = "$123"
         msg = (
@@ -862,8 +870,8 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, "R203", msg)
 
-    def test_r203_coord_bounds_missing_var(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_r203_coord_bounds_missing_var(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         # Add an invalid bounds attribute to the node_lon coord.
         coord.attributes["bounds"] = "other_var"
         msg = (
@@ -872,8 +880,8 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, "R203", msg)
 
-    def test_r203_coord_bounds_missing_element_dim(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_r203_coord_bounds_missing_element_dim(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         # Add node-lon bounds, with inappropriate dims.
         scan.dimensions["extra1"] = NcDimSummary(3)
         scan.dimensions["extra2"] = NcDimSummary(2)
@@ -989,8 +997,8 @@ class TestChecker_Coords(DatasetChecker):
     # Advisory warnings
     #
 
-    def test_a201_coord_multiple_meshes(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_a201_coord_multiple_meshes(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         # Copy 'topology' mesh and all its components to make 'topology_2'
         mesh2 = next_mesh(scan, "topology")
         # Reference the old 'node_lon' variable in the new 'topology_2' mesh
@@ -1008,25 +1016,224 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, statements=[("A201", msg), ("R202", msg2)])
 
-    def test_a202_coord_not_floating_point(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_a202_coord_not_floating_point(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         coord.dtype = np.dtype(np.int32)
         msg = (
-            'variable "node_lon" within topology:node_coordinates has a '
-            r"dtype which is not floating-point : int32\."
+            'variable "node_lon" within topology:node_coordinates has '
+            r'dtype "int32", which is not floating-point\.'
         )
         self.check(scan, "A202", msg)
 
-    def test_a203_coord_no_stdname(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_a203_coord_no_stdname(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         del coord.attributes["standard_name"]
         msg = 'has no "standard_name" attribute'
         self.check(scan, "A203", msg)
 
-    def test_a204_coord_no_units(self, coordvar_scan_2d):
-        scan, coord = coordvar_scan_2d
+    def test_a204_coord_no_units(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
         del coord.attributes["units"]
         msg = 'has no "units" attribute'
         self.check(scan, "A204", msg)
 
     # A205 : bounds data matching expected -- not yet implemented
+
+
+class TestChecker_Connectivities(DatasetChecker):
+    @fixture
+    def scan_2d_and_connvar(self, scan_2d_mesh):
+        return scan_2d_mesh, scan_2d_mesh.variables["face_nodes"]
+
+    def test_r301_conn_missing_cfrole(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        del conn.attributes["cf_role"]
+        msg = "\"face_nodes\".* has no 'cf_role' attribute."
+        self.check(scan, "R301", msg)
+
+    def test_r302_conn_bad_cfrole(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        # Set to a valid CF discrete-sampling term, to avoid a warning about
+        # valid CF values (a possible future check)
+        conn.attributes["cf_role"] = "profile_id"
+        msg = (
+            '"face_nodes".* has cf_role="profile_id".*'
+            "not a valid UGRID connectivity"
+        )
+        self.check(scan, "R302", msg)
+
+    def test_r303_conn_cfrole_differentfromparent(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.attributes["cf_role"] = "face_face_connectivity"
+        msg = (
+            'cf_role="face_face_connectivity".*'
+            "different from its role in the parent.*"
+            '"face_node_connectivity"'
+        )
+        self.check(scan, "R303", msg)
+
+    def test_r304_conn_bad_ndims(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.dimensions = conn.dimensions + ("num_vertices",)
+        msg = (
+            r"dimensions \('face_dim', 'num_vertices', 'num_vertices'\), "
+            "of which there are 3, instead of 2"
+        )
+        self.check(scan, "R304", msg)
+
+    def test_r305_conn_no_parent_dim(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.dimensions = ("num_vertices", "num_vertices")
+        msg = (
+            r"dimensions \('num_vertices', 'num_vertices'\).*"
+            "does not contain any element dimension of the parent mesh"
+        )
+        self.check(scan, "R305", msg)
+
+    def test_r306_conn_no_nonparent_dim(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.dimensions = ("face_dim", "face_dim")
+        msg = (
+            r"dimensions \('face_dim', 'face_dim'\).*"
+            "does not contain any dimension which is "
+            "not an element dimension of the parent mesh"
+        )
+        self.check(scan, "R306", msg)
+
+    def test_r307_conn_wrong_element_dim(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.dimensions = ("num_node", "num_vertices")
+        msg = (
+            "does not include the expected face dimension "
+            r'of the parent mesh, "face_dim"\.'
+        )
+        self.check(scan, "R307", msg)
+
+    @staticmethod
+    def _add_edges(scan):
+        meshvar = scan.variables["topology"]
+        # Add edges, and an edge-node connectivity ..
+        scan.dimensions["edges"] = NcDimSummary(5)
+        scan.dimensions["n_edge_ends"] = NcDimSummary(2)
+        edgenodes_name = "edge_nodes"
+        scan.variables[edgenodes_name] = NcVariableSummary(
+            name=edgenodes_name,
+            dimensions=["edges", "n_edge_ends"],
+            shape=(5, 2),
+            dtype=np.dtype(np.int32),
+            attributes={"cf_role": "edge_node_connectivity"},
+        )
+        meshvar.attributes["edge_node_connectivity"] = edgenodes_name
+
+    def test_r308_conn_bad_num_edge_ends(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        self._add_edges(scan)
+        # Adjust the length of the 'n_edge_ends' dim : this is the error.
+        scan.dimensions["n_edge_ends"] = NcDimSummary(7)
+        msg = (
+            '"edge_nodes".* contains the non-mesh dimension "n_edge_ends", '
+            r"but this has length 7 instead of 2\."
+        )
+        self.check(scan, "R308", msg)
+
+    def test_r309_conn_bad_startindex_value(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.attributes["start_index"] = np.array(3, dtype=conn.dtype)
+        msg = (
+            '"face_nodes".* has a start_index of "3", '
+            r"which is not either 0 or 1\."
+        )
+        self.check(scan, "R309", msg)
+
+    # R310 -- not implementing data checks yet
+
+    #
+    # Advisory checks
+    #
+
+    def test_a301_conn_multiple_meshes(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+
+        # Copy 'topology' mesh and all its components to make 'topology_2'
+        mesh2 = next_mesh(scan, "topology")
+        # Reference the old 'face_nodes' variable in the new 'topology_2' mesh
+        assert mesh2.attributes["face_node_connectivity"] == "face_nodes_2"
+        mesh2.attributes["face_node_connectivity"] = "face_nodes"
+        msg = (
+            '"face_nodes" is referenced by multiple mesh variables : '
+            "topology:face_node_connectivity, "
+            r"topology_2:face_node_connectivity\."
+        )
+        # Note: we also get a 'doesn't match parent dim' error
+        # - this can't easily be avoided.
+        msg2 = "does not contain any element dimension of the parent mesh"
+        self.check(scan, statements=[("A301", msg), ("R305", msg2)])
+
+    def test_a302_conn_nonintegraltype(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.dtype = np.dtype(np.float32)
+        # N.B. also adjust dtype of start_index, to avoid an A303
+        conn.attributes["start_index"] = np.array(0.0, dtype=conn.dtype)
+        msg = (
+            '"face_nodes".* has dtype "float32", '
+            r"which is not an integer type\."
+        )
+        self.check(scan, "A302", msg)
+
+    def test_a303_conn_bad_startindex_type(self, scan_2d_and_connvar):
+        scan, conn = scan_2d_and_connvar
+        conn.attributes["start_index"] = np.array(1.0)
+        msg = (
+            'start_index of dtype "float64".* different from the '
+            'variable dtype, "int32"'
+        )
+        self.check(scan, "A303", msg)
+
+    def test_a304_conn_unexpected_fillvalue(self, scan_2d_and_connvar):
+        # A "xxx_node_connectivity" should not have a fill-value
+        scan, conn = scan_2d_and_connvar
+        conn.attributes["_FillValue"] = np.array(-1, dtype=conn.dtype)
+        msg = (
+            '"face_nodes".* has a _FillValue attribute, which '
+            "should not be present on a "
+            r'"face_node_connectivity" connectivity\.'
+        )
+        self.check(scan, "A304", msg)
+
+    # A305 checks for missing data -- not yet implemented
+
+    def _add_edges_and_faceedges(self, scan):
+        self._add_edges(scan)
+        faceedge_varname = "face_edges"
+        scan.variables[faceedge_varname] = NcVariableSummary(
+            name=faceedge_varname,
+            dimensions=["face_dim", "n_vertices"],
+            shape=(6, 4),
+            dtype=np.dtype(np.int32),
+            attributes={"cf_role": "face_edge_connectivity"},
+        )
+        meshvar = scan.variables["topology"]
+        meshvar.attributes["face_edge_connectivity"] = faceedge_varname
+
+    def test_a306_conn_fillvalue_baddtype(self, scan_2d_mesh):
+        # Add edges and a face-edge connectivity, because face_nodes can't have
+        # missing indices.
+        self._add_edges_and_faceedges(scan_2d_mesh)
+        conn = scan_2d_mesh.variables["face_edges"]
+        conn.attributes["_FillValue"] = np.array(-1, dtype=np.int16)
+        msg = (
+            '"face_edges".* has a _FillValue of dtype "int16", '
+            r'which is different from the variable dtype, "int32"\.'
+        )
+        self.check(scan_2d_mesh, "A306", msg)
+
+    def test_a307_conn_fillvalue_badvalue(self, scan_2d_mesh):
+        # Add edges and a face-edge connectivity, because face_nodes can't have
+        # missing indices.
+        self._add_edges_and_faceedges(scan_2d_mesh)
+        conn = scan_2d_mesh.variables["face_edges"]
+        conn.attributes["_FillValue"] = np.array(999, dtype=conn.dtype)
+        msg = r'"face_edges".* has _FillValue="999", which is not negative\.'
+        self.check(scan_2d_mesh, "A307", msg)
+
+    # A308 checks values within the dim range -- not yet implemented

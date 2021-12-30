@@ -284,7 +284,7 @@ class Checker:
             if dtype.kind != "f":
                 log_coord(
                     "A202",
-                    f"has a dtype which is not floating-point : {dtype}.",
+                    f'has dtype "{dtype}", which is not floating-point.',
                 )
 
             # A203 standard-name : has+valid (can't handle fully ??)
@@ -371,7 +371,7 @@ class Checker:
                     msg = (
                         f"{dims_msg}, which does not include the expected "
                         f"{location} dimension of the parent mesh, "
-                        f"which is {parent_dim}."
+                        f'"{parent_dim}".'
                     )
                     log_conn("R307", msg)
 
@@ -390,14 +390,17 @@ class Checker:
                 if nonmesh_length != 2:
                     msg = (
                         f"{dims_msg}, which contains the non-mesh "
-                        f'dimension  "{conn_nonmesh_dim}", but this has '
-                        f"length {nonmesh_length}, instead of 2."
+                        f'dimension "{conn_nonmesh_dim}", but this has '
+                        f"length {nonmesh_length} instead of 2."
                     )
                     log_conn("R308", msg)
 
             index_value = conn_var.attributes.get("start_index")
             if index_value is not None:
-                if index_value not in (0, 1):
+                # Note: check value, converted to int.
+                # This avoids an extra warning for strings like "0", "1",
+                # since a non-integral type triggers an A302 warning anyway.
+                if int(index_value) not in (0, 1):
                     msg = (
                         f'has a start_index of "{index_value}", which is not '
                         "either 0 or 1."
@@ -419,16 +422,16 @@ class Checker:
 
             if conn_var.dtype.kind != "i":
                 msg = (
-                    f"has dtype {conn_var.dtype}, "
-                    "which is not an integer type"
+                    f'has dtype "{conn_var.dtype}", '
+                    "which is not an integer type."
                 )
                 log_conn("A302", msg)
 
             if index_value is not None and index_value.dtype != conn_var.dtype:
                 msg = (
-                    f"has a start_index of dtype {index_value.dtype}, "
+                    f'has a start_index of dtype "{index_value.dtype}", '
                     "which is different from the variable dtype, "
-                    f"{conn_var.dtype}."
+                    f'"{conn_var.dtype}".'
                 )
                 log_conn("A303", msg)
 
@@ -450,17 +453,14 @@ class Checker:
 
             if fill_value is not None and fill_value.dtype != conn_var.dtype:
                 msg = (
-                    f"has a _FillValue of dtype {fill_value.dtype}, "
+                    f'has a _FillValue of dtype "{fill_value.dtype}", '
                     "which is different from the variable dtype, "
-                    f"{conn_var.dtype}."
+                    f'"{conn_var.dtype}".'
                 )
                 log_conn("A306", msg)
 
             if fill_value is not None and fill_value >= 0:
-                msg = (
-                    f"has a _FillValue of {fill_value}, "
-                    "which is not negative."
-                )
+                msg = f'has _FillValue="{fill_value}", which is not negative.'
                 log_conn("A307", msg)
 
             if self.do_data_checks:

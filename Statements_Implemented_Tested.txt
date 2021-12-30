@@ -30,44 +30,44 @@ A104    i   t
 ?A106   i   t       # add : "A106 ? : attribute "xxx_dimension" is not valid since there is no "xxx_node_connectivity"
 
 coordinate variable
-R201
-R202
-R203
+R201    i   t
+R202    i   t
+R203    i   t
 -
-A201
-A202
-A203
-A204
-A205
+A201    i   t
+A202    i   t
+A203    i   t
+A204    i   t
+A205    i   ()
 
 connectivity variable
-R301
-R302
-R303
-R304
-R305
-R306
-R307
-R308
-R309
-R310
+R301    i   t
+R302    i   t
+R303    i   t
+R304    i   t
+R305    i   t
+R306    i   t
+R307    i   t
+R308    i   t
+R309    i   t
+R310    i   ()
+-
+A301    i   t
+A302    i   t
+A303    i   t
+A304    i   t
+A305    i   ()
+A306    i   t
+A307    i   t
+A308    i   ()
 
-A301
-A302
-A303
-A304
-A305
-A306
-A307
-A308
-
+location index set variable
 R401
 R402
 R403
 R404
 R405
-
-location index set variable
+-
 A401
 A402
 A403
@@ -87,7 +87,7 @@ R508
 R509
 R510
 
-misc
+miscellaneous
 A901
 A902
 A903

@@ -88,7 +88,7 @@ mesh data variable
 - <a id="R509" href="#R509">R509</a> must contain one and only one mesh element dimension, which
 - <a id="R510" href="#R510">R510</a> is the appropriate element dimension of its mesh and location,
 
-misc
+miscellaneous
 - <a id="A901" href="#A901">A901</a> all dataset contents (dimension, variables and their attributes) should also be
 - <a id="A902" href="#A902">A902</a> there should be a global `Conventions` attribute,
 - <a id="A903" href="#A903">A903</a> which contains a string section of the form `UGRID-<X.Y>`,
