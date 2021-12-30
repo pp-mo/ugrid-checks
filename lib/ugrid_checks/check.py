@@ -3,6 +3,8 @@ from pathlib import Path
 import re
 from typing import AnyStr, Dict, List, Tuple, Union
 
+import numpy as np
+
 from .logging import LOG
 from .nc_dataset_scan import NcFileSummary, NcVariableSummary, scan_dataset
 from .scan_utils import (
@@ -41,8 +43,11 @@ class Checker:
         self.do_data_checks = do_data_checks
         self._all_vars = file_scan.variables
         # Note: the following are filled in the initial meshvar scanning
-        self._all_meshvars: List[NcVariableSummary] = []
+        self._meshdata_vars: List[NcVariableSummary] = []
+        self._mesh_vars: List[NcVariableSummary] = []
+        self._lis_vars: List[NcVariableSummary] = []
         self._mesh_referrers: Dict[str, str] = {}
+        self._lis_referrers: Dict[str, str] = {}
         self._all_mesh_dims: Dict[str, Dict[str, Union[None, str]]] = {}
 
     def check_mesh_attr_is_varlist(
@@ -115,7 +120,7 @@ class Checker:
                         success = False
         return success
 
-    def var_ref_problem(self, attr_value: str):
+    def var_ref_problem(self, attr_value: np.ndarray):
         """
         Make a text description of any problems of a single-variable reference.
 
@@ -125,19 +130,23 @@ class Checker:
 
         """
         succeed = True
-        names = property_namelist(attr_value)
-        if len(names) != 1:
-            result = "is not a single variable name."
+        if attr_value.dtype.kind != "U":
+            result = "is not a string value"
             succeed = False
+        if succeed:
+            names = property_namelist(attr_value)
+            if len(names) != 1:
+                result = "is not a single variable name"
+                succeed = False
         if succeed:
             boundsvar_name = property_as_single_name(attr_value)
             if not _VALID_NAME_REGEX.match(boundsvar_name):
-                result = "is not a valid netcdf variable name."
+                result = "is not a valid netcdf variable name"
                 succeed = False
         if succeed:
             bounds_var = self._all_vars.get(boundsvar_name)
             if bounds_var is None:
-                result = "is not a variable in the dataset."
+                result = "is not a variable in the dataset"
                 succeed = False
         if succeed:
             result = ""
@@ -160,7 +169,7 @@ class Checker:
         result_codes_and_messages = []
 
         def log_bounds_statement(code, msg):
-            msg = f'has bounds "{bounds_name}", which ' + msg
+            msg = f'has bounds="{bounds_name}", which {msg}.'
             result_codes_and_messages.append((code, msg))
 
         has_bounds = bounds_name is not None
@@ -471,7 +480,7 @@ class Checker:
                 )
                 log_conn("A308", msg)
 
-    def check_meshvar(self, meshvar: NcVariableSummary) -> Dict[str, str]:
+    def check_mesh_var(self, meshvar: NcVariableSummary) -> Dict[str, str]:
         """
         Run checks on a mesh variable.
 
@@ -794,6 +803,21 @@ class Checker:
 
         return mesh_dims
 
+    def check_meshdata_var(self, datavar: NcVariableSummary):
+        mesh_name = datavar.attributes.get("mesh")
+        if mesh_name is not None:
+            msg = self.var_ref_problem(mesh_name)
+            if msg:
+                LOG.state(
+                    "R502",
+                    "Mesh data",
+                    datavar.name,
+                    f'has mesh="{mesh_name}", which {msg}.',
+                )
+
+    def check_lis_var(self, datavar: NcVariableSummary):
+        pass
+
     def check_dataset_inner(self):
         """
         Run UGRID conformance checks on a representation of a file.
@@ -809,73 +833,90 @@ class Checker:
 
         """
         #
-        # Phase#1 : identify mesh data variables
+        # Phase#1 : identify mesh variables, mesh data variables,
+        # and location index sets
         #
-        meshdata_vars = vars_w_props(self._all_vars, mesh="*")
+        # Location index sets are those with a cf_role of 'location_index_set'
+        self._lis_vars = vars_w_props(
+            self._all_vars, cf_role="location_index_set"
+        )
 
-        # Check that any var 'mesh' property names a valid mesh variable.
-        self._all_meshvars = {}
-        self._mesh_referrers = {}
-        for mrv_name, mrv_var in meshdata_vars.items():
-            meshprop = mrv_var.attributes["mesh"]
-            meshvar_name = property_as_single_name(meshprop)
-            if not meshvar_name:
-                LOG.state(
-                    "R502",
-                    "Mesh data",
-                    mrv_name,
-                    (
-                        f"has attribute \"mesh='{meshprop}'\", which is not a "
-                        "valid variable name."
-                    ),
+        # Mesh data variables are those with either a 'mesh' or
+        # 'location_index_set' attribute, but excluding the lis-vars.
+        self._meshdata_vars = {
+            varname: var
+            for varname, var in self._all_vars.items()
+            if (
+                varname not in self._lis_vars
+                and (
+                    "mesh" in var.attributes
+                    or "location_index_set" in var.attributes
                 )
-            elif meshvar_name not in self._all_meshvars:
-                if meshvar_name not in self._all_vars:
-                    LOG.state(
-                        "R502",
-                        "Mesh data",
-                        mrv_name,
-                        (
-                            f"has attribute \"mesh='{meshvar_name}'\", but "
-                            f'there is no "{meshvar_name}" variable '
-                            "in the dataset."
-                        ),
-                    )
-                else:
-                    # Include this one in those we check as mesh-vars.
-                    self._all_meshvars[meshvar_name] = self._all_vars[
-                        meshvar_name
-                    ]
-                    # Record name of referring var.
-                    # N.B. potentially this can overwrite a previous referrer,
-                    # but "any one of several" will be OK for our purpose.
-                    self._mesh_referrers[meshvar_name] = mrv_name
+            )
+        }
+
+        # Mesh vars are those with cf_role="mesh_topology".
+        self._mesh_vars = vars_w_props(self._all_vars, cf_role="mesh_topology")
+
+        # Scan for any meshvars referred to by 'mesh' or 'location_index_set'
+        # properties in mesh-data vars.
+        # These are included among potential meshdata- and lis- variables
+        # (so they are detected + checked even without the correct cf_role)
+        self._mesh_referrers = {}
+        self._lis_referrers = {}
+        for referrer_name, referrer_var in self._meshdata_vars.items():
+            meshprop = referrer_var.attributes.get("mesh")
+            meshvar_name = property_as_single_name(meshprop)
+            if (
+                meshvar_name is not None
+                and meshvar_name in self._all_vars
+                and meshvar_name not in self._mesh_vars
+            ):
+                # Add this reference to out list of all meshvars
+                self._mesh_vars[meshvar_name] = self._all_vars[meshvar_name]
+                # Record name of referring var.
+                # N.B. potentially this can overwrite a previous referrer,
+                # but "any one of several" will be OK for our purpose.
+                self._mesh_referrers[meshvar_name] = referrer_name
+
+            # Do something similar with lis references.
+            meshprop = referrer_var.attributes.get("location_index_set")
+            lisvar_name = property_as_single_name(meshprop)
+            if (
+                lisvar_name is not None
+                and lisvar_name in self._all_vars
+                and lisvar_name not in self._lis_vars
+            ):
+                # Add this reference to out list of all meshvars
+                self._lis_vars[lisvar_name] = self._all_vars[lisvar_name]
+                # Record name of referring var.
+                self._lis_referrers[lisvar_name] = referrer_name
 
         #
         # Phase#2 : check all mesh variables
         #
-        # Add all vars with 'cf_role="mesh_topology"' to the all-meshvars dict
-        meshvars_by_cf_role = vars_w_props(
-            self._all_vars, cf_role="mesh_topology"
-        )
-        self._all_meshvars.update(meshvars_by_cf_role)
 
-        # Check all putative mesh vars.
+        # Check all putative mesh vars and collect dimension maps.
 
         # Build a map of the dimensions of all the meshes,
         # all_meshes_dims: {meshname: {location: dimname}}
         self._all_mesh_dims = {}
+        # Check all mesh vars
+        # Note: this call also fills in 'self._all_mesh_dims'.
+        for meshvar in self._mesh_vars.values():
+            self.check_mesh_var(meshvar)
 
-        # Also keep an account of coordinates + connectivities which are
-        # cross-referred between different meshes.
-        # Just so that we can avoid warning about these more than once.
-        # cross_mapped_coords
+        # Check all mesh-data vars
+        for meshdata_var in self._meshdata_vars.values():
+            self.check_meshdata_var(meshdata_var)
 
-        for meshname, meshvar in self._all_meshvars.items():
-            # Note: this call also fills in 'self._all_mesh_dims'.
-            self.check_meshvar(meshvar)
+        # Check all lis-vars
+        for lis_var in self._lis_vars.values():
+            self.check_lis_var(lis_var)
 
-        # Check for dimensions shared between meshes - an advisory warning.
+        #
+        # Now check for dimensions shared between meshes - an advisory warning.
+        #
 
         # Convert all_meshes_dims: {meshname: {location: dimname}}
         # .. to dim_meshes: {dimname: [meshnames]}
@@ -916,8 +957,8 @@ class Checker:
         # A301 connectivity should have 1-and-only-1 parent mesh
         var_refs_meshes_attrs = {}
         all_ref_attrs = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
-        for some_meshname in sorted(self._all_meshvars):
-            some_meshvar = self._all_meshvars[some_meshname]
+        for some_meshname in sorted(self._mesh_vars):
+            some_meshvar = self._mesh_vars[some_meshname]
             for some_refattr in all_ref_attrs:
                 is_coord = some_refattr in _VALID_MESHCOORD_ATTRS
                 attrval = some_meshvar.attributes.get(some_refattr, None)

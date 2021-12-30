@@ -801,31 +801,41 @@ class TestChecker_DataVariables(DatasetChecker):
     def scan_2d_and_datavar(self, scan_2d_mesh):
         return scan_2d_mesh, scan_2d_mesh.variables["sample_data"]
 
-    # Test data-variable checking.
-    def test_r502_datavar_nonexistent_mesh(self, scan_2d_and_datavar):
-        scan, datavar = scan_2d_and_datavar
-        datavar.attributes["mesh"] = "other_mesh"
-        self.check(scan, "R502", 'no "other_mesh" variable')
-
-    def test_r502_datavar_bad_mesh_name(self, scan_2d_and_datavar):
-        scan, datavar = scan_2d_and_datavar
-        datavar.attributes["mesh"] = "this that other"
-        msg = (
-            "\"mesh='this that other'\", "
-            "which is not a valid variable name."
-        )
-        self.check(scan, "R502", msg)
-
-    def test_r502_datavar_empty_mesh_name(self, scan_2d_and_datavar):
+    def test_r502_datavar_empty_mesh(self, scan_2d_and_datavar):
         scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = ""
-        msg = "\"mesh=''\", which is not a valid variable name."
+        msg = r'mesh="", which is not a single variable name\.'
+        self.check(scan, "R502", msg)
+
+    def test_r502_datavar_invalid_mesh_name(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
+        datavar.attributes["mesh"] = "$123"
+        msg = r'mesh="\$123", which is not a valid netcdf variable name\.'
+        self.check(scan, "R502", msg)
+
+    def test_r502_datavar_bad_mesh_dtype(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
+        datavar.attributes["mesh"] = 2.0
+        msg = r'mesh="2.0", which is not a string value\.'
+        self.check(scan, "R502", msg)
+
+    def test_r502_datavar_multi_mesh_name(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
+        datavar.attributes["mesh"] = "this that other"
+        msg = r'mesh="this that other", which is not a single variable name\.'
         self.check(scan, "R502", msg)
 
     def test_r502_datavar_missing_meshvar(self, scan_2d_and_datavar):
         scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = "absent"
-        msg = "mesh='absent'.*but there is no \"absent\" variable"
+        msg = r'mesh="absent", which is not a variable in the dataset\.'
+        self.check(scan, "R502", msg)
+
+    # Test data-variable checking.
+    def test_r502_datavar_nonexistent_mesh(self, scan_2d_and_datavar):
+        scan, datavar = scan_2d_and_datavar
+        datavar.attributes["mesh"] = "other_mesh"
+        msg = r'mesh="other_mesh", which is not a variable in the dataset\.'
         self.check(scan, "R502", msg)
 
 
@@ -855,9 +865,16 @@ class TestChecker_Coords(DatasetChecker):
         # Add an invalid bounds attribute to the node_lon coord.
         coord.attributes["bounds"] = "a b"
         msg = (
-            '"node_lon" within topology:node_coordinates has bounds "a b", '
+            '"node_lon" within topology:node_coordinates has bounds="a b", '
             "which is not a single variable"
         )
+        self.check(scan, "R203", msg)
+
+    def test_r203_coord_bounds_bad_attrdtype(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
+        # Add an invalid bounds attribute to the node_lon coord.
+        coord.attributes["bounds"] = 2.0
+        msg = r'has bounds="2.0", which is not a string value\.'
         self.check(scan, "R203", msg)
 
     def test_r203_coord_bounds_bad_name(self, scan_2d_and_coordvar):
@@ -865,7 +882,7 @@ class TestChecker_Coords(DatasetChecker):
         # Add an invalid bounds attribute to the node_lon coord.
         coord.attributes["bounds"] = "$123"
         msg = (
-            r'"node_lon" within topology:node_coordinates has bounds "\$123", '
+            r'"node_lon" within topology:node_coordinates has bounds="\$123", '
             "which is not a valid netcdf variable name"
         )
         self.check(scan, "R203", msg)
@@ -876,7 +893,7 @@ class TestChecker_Coords(DatasetChecker):
         coord.attributes["bounds"] = "other_var"
         msg = (
             '"node_lon" within topology:node_coordinates has '
-            'bounds "other_var", which is not a variable in the dataset'
+            'bounds="other_var", which is not a variable in the dataset'
         )
         self.check(scan, "R203", msg)
 
