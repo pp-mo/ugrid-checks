@@ -34,3 +34,8 @@ Add an advisory that different dims are used for different locations.
 Add an advisory that ALL vars should have only known-allowed "cf_role"
 
 Add an advisory that
+
+Add a REQUIREMENT that connectivities contain *exactly 1* valid name
+ = "R108.a"
+
+R307/308 should reference the _parent_ role (the reference attribute name), and *not* the connectivity cf_role attribute
