@@ -804,16 +804,102 @@ class Checker:
         return mesh_dims
 
     def check_meshdata_var(self, datavar: NcVariableSummary):
+        def log_meshdata(errcode, msg):
+            LOG.state(errcode, "Mesh data", datavar.name, msg)
+
         mesh_name = datavar.attributes.get("mesh")
-        if mesh_name is not None:
-            msg = self.var_ref_problem(mesh_name)
-            if msg:
-                LOG.state(
-                    "R502",
-                    "Mesh data",
-                    datavar.name,
-                    f'has mesh="{mesh_name}", which {msg}.',
+        lis_name = datavar.attributes.get("location_index_set")
+        location = datavar.attributes.get("location")
+        # At least one of these is true, or we would not have identified this
+        # as a mesh-data var.
+        assert mesh_name is not None or lis_name is not None
+
+        # Decide whether to check as a lis-datavar or a mesh-datavar
+        # This is designed to produce 3 possible "clash" errors:
+        #   lis & mesh & ~location --> R508
+        #   lis & location & ~mesh --> R509
+        #   mesh & lis --> R501
+        treat_as_lis = lis_name is not None and (
+            mesh_name is None or location is None
+        )
+
+        if treat_as_lis:
+            # Treat as a 'lis' : complain about any mesh or location
+            ref_msg = self.var_ref_problem(lis_name)
+            if ref_msg:
+                msg = f'has location_index_set="{mesh_name}", which {ref_msg}.'
+                log_meshdata("R508", msg)
+            if mesh_name is not None:
+                msg = (
+                    "has a 'mesh' attribute, which is invalid since "
+                    "it also has a 'location_index_set' attribute."
                 )
+                log_meshdata("R506", msg)
+            if location is not None:
+                msg = (
+                    "has a 'location' attribute, which is invalid since "
+                    "it also has a 'location_index_set' attribute."
+                )
+                log_meshdata("R507", msg)
+            if ref_msg is None:
+                lis_var = self._all_vars[lis_name]
+                lis_dims = lis_var.dimensions
+                lis_ndims = len(lis_dims)
+                failed = False
+                if lis_ndims != 1:
+                    msg = f"has {lis_ndims} dimensions, instead of 1."
+                    log_meshdata("R508", msg)
+                    failed = True
+                if not failed:
+                    (lis_dim,) = lis_dims
+                    mesh_name = lis_var.attributes.get("mesh")
+                    failed = mesh_name not in self._all_mesh_dims
+                if not failed:
+                    location = lis_var.attributes.get("location")
+                    failed = location not in ("node", "edge", "face")
+                if not failed:
+                    mesh_dim = self._all_mesh_dims[mesh_name][location]
+                    if lis_dim != mesh_dim:
+                        msg = (
+                            f'has dimension "{lis_dim}", which is different '
+                            f"from the {location} dimension of the "
+                            f'"{mesh_name}" mesh, which is "{mesh_dim}".'
+                        )
+                        log_meshdata("R509", msg)
+
+        else:
+            # Treat as a 'mesh' : complain about any location-index-set
+            ref_msg = self.var_ref_problem(mesh_name)
+            if ref_msg:
+                msg = f'has mesh="{mesh_name}", which {ref_msg}.'
+                log_meshdata("R502", msg)
+            if lis_name is not None:
+                msg = (
+                    "has a 'location_index_set' attribute, which is not valid "
+                    "since it also has a 'mesh' attribute."
+                )
+                log_meshdata("R501", msg)
+            if location is None:
+                log_meshdata("R503", "has no 'location' attribute.")
+            elif str(location) not in ("face", "edge", "node"):
+                msg = (
+                    f'has location="{location}", which is not one of '
+                    '"face", "edge" or "node".'
+                )
+                log_meshdata("R504", msg)
+            else:
+                # Check against the mesh, if it was valid
+                mesh_name = str(mesh_name)
+                location = str(location)
+                if mesh_name in self._all_mesh_dims:
+                    mesh_dims = self._all_mesh_dims[mesh_name]
+                    mesh_location = mesh_dims[location]
+                    if mesh_location is None:
+                        msg = (
+                            f'has location="{location}", which is not a '
+                            f'location in the parent mesh, "{mesh_name}".'
+                        )
+                        log_meshdata("R505", msg)
 
     def check_lis_var(self, datavar: NcVariableSummary):
         pass

@@ -459,8 +459,10 @@ class TestChecker_MeshVariables(DatasetChecker):
     ):
         scan, meshvar = scan_1d_and_meshvar
         del meshvar.attributes["edge_node_connectivity"]
-        # Also remove this, just to avoid an additional error
+        # Remove this, just to avoid an additional error
         del meshvar.attributes["edge_dimension"]
+        # Avoid checking the data-variable, which now has a dim problem.
+        del scan.variables["sample_data"].attributes["mesh"]
         msg = 'has "topology_dimension=1", but.*' "no 'edge_node_connectivity'"
         self.check(scan, "R111", msg)
 
@@ -532,12 +534,16 @@ class TestChecker_MeshVariables(DatasetChecker):
     def test_r115_mesh_edgedim_unknown(self, scan_1d_and_meshvar):
         scan, meshvar = scan_1d_and_meshvar
         meshvar.attributes["edge_dimension"] = "unknown_dim"
+        # Avoid checking the data-variable, which now has a dim problem.
+        del scan.variables["sample_data"].attributes["mesh"]
         msg = 'edge_dimension="unknown_dim".* not a dimension'
         self._check_w_r305(scan, "R115", msg)
 
     def test_r117_mesh_facedim_unknown(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["face_dimension"] = "unknown_dim"
+        # Avoid checking the data-variable, which now has a dim problem.
+        del scan.variables["sample_data"].attributes["mesh"]
         msg = 'face_dimension="unknown_dim".* not a dimension'
         self._check_w_r305(scan, "R117", msg)
 
