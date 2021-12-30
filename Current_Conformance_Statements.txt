@@ -77,16 +77,18 @@ location index set variable
 - <a id="A406" href="#A406">A406</a> they should all be valid indexes into the relevant element dimension
 
 mesh data variable
-- <a id="R501" href="#R501">R501</a> there must be no `location_index_set` attribute
-- <a id="R502" href="#R502">R502</a> the `mesh` must be the name of a valid mesh variable in the dataset
-- <a id="R503" href="#R503">R503</a> there must be a `location` attribute,
-- <a id="R504" href="#R504">R504</a> which is one of `face`, `edge` or `node`, and 
-- <a id="R505" href="#R505">R505</a> the corresponding dimension must exist in the parent mesh
-- <a id="R506" href="#R506">R506</a> there must be no `mesh` attribute
-- <a id="R507" href="#R507">R507</a> there must be no `location` attribute
-- <a id="R508" href="#R508">R508</a> the `location_index_set` must name a valid location index set variable in the dataset
-- <a id="R509" href="#R509">R509</a> must contain one and only one mesh element dimension, which
-- <a id="R510" href="#R510">R510</a> is the appropriate element dimension of its mesh and location,
+with MESH
+    - <a id="R501" href="#R501">R501</a> there must be no `location_index_set` attribute
+    - <a id="R502" href="#R502">R502</a> the `mesh` must be the name of a valid mesh variable in the dataset
+    - <a id="R503" href="#R503">R503</a> there must be a `location` attribute,
+    - <a id="R504" href="#R504">R504</a> which is one of `face`, `edge` or `node`, and
+    - <a id="R505" href="#R505">R505</a> the corresponding dimension must exist in the parent mesh
+with LOCATION-INDEX-SET
+    - <a id="R506" href="#R506">R506</a> there must be no `mesh` attribute
+    - <a id="R507" href="#R507">R507</a> there must be no `location` attribute
+    - <a id="R508" href="#R508">R508</a> the `location_index_set` must name a valid location index set variable in the dataset
+    - <a id="R509" href="#R509">R509</a> must contain one and only one mesh element dimension, which
+    - <a id="R510" href="#R510">R510</a> is the appropriate element dimension of its mesh and location,
 
 miscellaneous
 - <a id="A901" href="#A901">A901</a> all dataset contents (dimension, variables and their attributes) should also be
