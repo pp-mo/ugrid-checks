@@ -306,10 +306,170 @@ class Checker:
         attr_name: str,
     ):
         """Validity-check a connectivity attribute of a mesh-variable."""
-        value = meshvar.attributes.get(attr_name)
-        more_todo = value is not None
-        if more_todo:
-            pass
+        attr_value = meshvar.attributes.get(attr_name)
+        ok = attr_value is not None
+        if ok:
+            conn_name = property_as_single_name(attr_value)
+            ok = conn_name is not None
+        if ok:
+            conn_var = self._all_vars.get(conn_name)
+            ok = conn_var is not None
+        if ok:
+            msg_prefix = f'of mesh "{meshvar.name}" '
+
+            def log_conn(errcode, msg):
+                LOG.state(
+                    errcode, "Mesh connectivity", conn_name, msg_prefix + msg
+                )
+
+            cf_role = conn_var.attributes.get("cf_role")
+            if cf_role is None:
+                log_conn("R301", "has no 'cf_role' attribute.")
+            elif cf_role not in _VALID_CONNECTIVITY_ROLES:
+                msg = (
+                    f'has cf_role="{cf_role}", '
+                    "which is not a valid UGRID connectivity attribute name."
+                )
+                log_conn("R302", msg)
+            elif cf_role != attr_name:
+                msg = (
+                    f'has cf_role="{cf_role}", which is different from its '
+                    f'role in the parent mesh, which is "{attr_name}".'
+                )
+                log_conn("R303", msg)
+
+            conn_dims = conn_var.dimensions
+            dims_msg = f"has dimensions {conn_dims!r}"
+            if len(conn_dims) != 2:
+                msg = (
+                    f"{dims_msg}, of which there are "
+                    f"{len(conn_dims)}, instead of 2."
+                )
+                log_conn("R304", msg)
+
+            mesh_dims = self._all_mesh_dims[meshvar.name]
+            is_parent_dim = [dim in mesh_dims.values() for dim in conn_dims]
+            n_parent_dims = sum(is_parent_dim)
+            if n_parent_dims == 0:
+                msg = (
+                    f"{dims_msg}, which does not contain any element "
+                    f"dimension of the parent mesh."
+                )
+                log_conn("R305", msg)
+            elif n_parent_dims == len(conn_dims):
+                msg = (
+                    f"{dims_msg}, which does not contain any dimension "
+                    f"which is not an element dimension of the parent mesh."
+                )
+                log_conn("R306", msg)
+            else:
+                # Some are parent mesh-dims, and some not.
+                # Just check that the *expected* mesh-dim is there.
+                location = attr_name.split("_")[0]
+                parent_dim = mesh_dims[location]
+                if parent_dim not in conn_dims:
+                    msg = (
+                        f"{dims_msg}, which does not include the expected "
+                        f"{location} dimension of the parent mesh, "
+                        f"which is {parent_dim}."
+                    )
+                    log_conn("R307", msg)
+
+            edgelike_conns = (
+                "edge_node_connectivity",
+                "boundary_node_connectivity",
+            )
+            if attr_name in edgelike_conns and n_parent_dims == 1:
+                (conn_nonmesh_dim,) = (
+                    dim
+                    for dim, in_parent in zip(conn_dims, is_parent_dim)
+                    if not in_parent
+                )
+                nonmesh_dim = self.file_scan.dimensions[conn_nonmesh_dim]
+                nonmesh_length = nonmesh_dim.length
+                if nonmesh_length != 2:
+                    msg = (
+                        f"{dims_msg}, which contains the non-mesh "
+                        f'dimension  "{conn_nonmesh_dim}", but this has '
+                        f"length {nonmesh_length}, instead of 2."
+                    )
+                    log_conn("R308", msg)
+
+            index_value = conn_var.attributes.get("start_index")
+            if index_value is not None:
+                if index_value not in (0, 1):
+                    msg = (
+                        f'has a start_index of "{index_value}", which is not '
+                        "either 0 or 1."
+                    )
+                    log_conn("R309", msg)
+
+            if self.do_data_checks:
+                if attr_name.endswith("_node_connectivity"):
+                    # Check for missing values
+                    msg = "may have missing indices (NOT YET CHECKED)."
+                    log_conn("R310", msg)
+
+            #
+            # Advisory checks
+            #
+
+            # A301 1-and-only-1 parent mesh
+            # done in 'check_dataset_inner', as it involves multiple meshes
+
+            if conn_var.dtype.kind != "i":
+                msg = (
+                    f"has dtype {conn_var.dtype}, "
+                    "which is not an integer type"
+                )
+                log_conn("A302", msg)
+
+            if index_value is not None and index_value.dtype != conn_var.dtype:
+                msg = (
+                    f"has a start_index of dtype {index_value.dtype}, "
+                    "which is different from the variable dtype, "
+                    f"{conn_var.dtype}."
+                )
+                log_conn("A303", msg)
+
+            fill_value = conn_var.attributes.get("_FillValue")
+            if (
+                attr_name.endswith("_node_connectivity")
+                and fill_value is not None
+            ):
+                msg = (
+                    f"has a _FillValue attribute, which should not be present "
+                    f'on a "{attr_name}" connectivity.'
+                )
+                log_conn("A304", msg)
+
+            if self.do_data_checks:
+                # check for missing indices
+                msg = "may have missing indices (NOT YET CHECKED)."
+                log_conn("A305", msg)
+
+            if fill_value is not None and fill_value.dtype != conn_var.dtype:
+                msg = (
+                    f"has a _FillValue of dtype {fill_value.dtype}, "
+                    "which is different from the variable dtype, "
+                    f"{conn_var.dtype}."
+                )
+                log_conn("A306", msg)
+
+            if fill_value is not None and fill_value >= 0:
+                msg = (
+                    f"has a _FillValue of {fill_value}, "
+                    "which is not negative."
+                )
+                log_conn("A307", msg)
+
+            if self.do_data_checks:
+                # check for missing indices
+                msg = (
+                    "may have indices which exceed the length of the element "
+                    "dimension (NOT YET CHECKED)."
+                )
+                log_conn("A308", msg)
 
     def check_meshvar(self, meshvar: NcVariableSummary) -> Dict[str, str]:
         """
@@ -439,16 +599,25 @@ class Checker:
         # Check all coordinate and connectivity attributes are valid "varlists"
         varlist_names = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
         for attr in varlist_names:
-            ok = self.check_mesh_attr_is_varlist(meshvar, attr)
-            if not ok:
-                value = meshvar.attributes.get(attr, "")
-                is_conn = attr in _VALID_CONNECTIVITY_ROLES
-                errcode = "R108" if is_conn else "R107"
-                msg = (
-                    f'attribute "{attr}" = "{value}", which is not a list '
-                    "of variables in the dataset."
-                )
-                log_meshvar(errcode, msg)
+            is_conn = attr in _VALID_CONNECTIVITY_ROLES
+            attr_value = meshvar.attributes.get(attr)
+            if attr_value is not None:
+                ok = self.check_mesh_attr_is_varlist(meshvar, attr)
+                var_names = property_namelist(attr_value)
+                if not ok:
+                    errcode = "R108" if is_conn else "R107"
+                    msg = (
+                        f'attribute "{attr}" = "{attr_value}", which is not '
+                        "a list of variables in the dataset."
+                    )
+                    log_meshvar(errcode, msg)
+                elif is_conn and len(var_names) != 1:
+                    # "R108.a"
+                    msg = (
+                        f'has {attr}="{var_names!r}", which contains '
+                        f"{len(var_names)} names, instead of 1."
+                    )
+                    log_meshvar("?", msg)
 
         # Work out the actual mesh dimensions.
         mesh_dims = {
