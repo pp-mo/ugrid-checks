@@ -87,8 +87,8 @@ with LOCATION-INDEX-SET
     - <a id="R506" href="#R506">R506</a> there must be no `mesh` attribute
     - <a id="R507" href="#R507">R507</a> there must be no `location` attribute
     - <a id="R508" href="#R508">R508</a> the `location_index_set` must name a valid location index set variable in the dataset
-    - <a id="R509" href="#R509">R509</a> must contain one and only one mesh element dimension, which
-    - <a id="R510" href="#R510">R510</a> is the appropriate element dimension of its mesh and location,
+- <a id="R509" href="#R509">R509</a> must contain one and only one mesh element dimension, which
+- <a id="R510" href="#R510">R510</a> is the appropriate element dimension of its mesh and location,
 
 miscellaneous
 - <a id="A901" href="#A901">A901</a> all dataset contents (dimension, variables and their attributes) should also be

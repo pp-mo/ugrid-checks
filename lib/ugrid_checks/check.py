@@ -5,13 +5,13 @@ from typing import AnyStr, Dict, List, Tuple, Union
 
 import numpy as np
 
-from .logging import LOG
 from .nc_dataset_scan import NcFileSummary, NcVariableSummary, scan_dataset
 from .scan_utils import (
     property_as_single_name,
     property_namelist,
     vars_w_props,
 )
+from .ugrid_logger import LOG
 
 __all__ = ["check_dataset"]
 
@@ -807,78 +807,73 @@ class Checker:
         def log_meshdata(errcode, msg):
             LOG.state(errcode, "Mesh data", datavar.name, msg)
 
-        mesh_name = datavar.attributes.get("mesh")
         lis_name = datavar.attributes.get("location_index_set")
+        mesh_name = datavar.attributes.get("mesh")
         location = datavar.attributes.get("location")
         # At least one of these is true, or we would not have identified this
         # as a mesh-data var.
         assert mesh_name is not None or lis_name is not None
 
-        # Decide whether to check as a lis-datavar or a mesh-datavar
+        # Decide whether to check this as a lis-datavar or a mesh-datavar
         # This is designed to produce 3 possible "clash" errors:
-        #   lis & mesh & ~location --> R508
-        #   lis & location & ~mesh --> R509
+        #   lis & mesh & ~location --> R506
+        #   lis & location & ~mesh --> R507
         #   mesh & lis --> R501
         treat_as_lis = lis_name is not None and (
             mesh_name is None or location is None
         )
 
+        # Initialise reference used for the generic parent dimension check
+        parent_varname = None  # Can be either a meshvar or a lis
+        parent_location = None
         if treat_as_lis:
-            # Treat as a 'lis' : complain about any mesh or location
+            # Treat the datavar as a 'lis-datavar'
+            #  --> has "location_index_set", but no "mesh" or "location"
             ref_msg = self.var_ref_problem(lis_name)
             if ref_msg:
-                msg = f'has location_index_set="{mesh_name}", which {ref_msg}.'
+                # Invalid 'location_index_set' reference
+                msg = f'has location_index_set="{lis_name}", which {ref_msg}.'
                 log_meshdata("R508", msg)
+            else:
+                # We have a valid lis var.  Take this as the 'parent' for
+                # the generic dimension test R510
+                parent_varname = str(lis_name)
+                lis_var = self._lis_vars[parent_varname]
+                # Also set the parent-location.
+                # NOTE: we are not checking the lis-var here, only the datavar,
+                # so just get a value that works if the lis is valid.
+                parent_location = str(lis_var.attributes.get("location", ""))
+
             if mesh_name is not None:
                 msg = (
-                    "has a 'mesh' attribute, which is invalid since "
-                    "it also has a 'location_index_set' attribute."
+                    "has a 'mesh' attribute, which is invalid since it is "
+                    "based on a 'location_index_set' attribute."
                 )
                 log_meshdata("R506", msg)
+
             if location is not None:
                 msg = (
-                    "has a 'location' attribute, which is invalid since "
-                    "it also has a 'location_index_set' attribute."
+                    "has a 'location' attribute, which is invalid since it is "
+                    "based on a 'location_index_set' attribute."
                 )
                 log_meshdata("R507", msg)
-            if ref_msg is None:
-                lis_var = self._all_vars[lis_name]
-                lis_dims = lis_var.dimensions
-                lis_ndims = len(lis_dims)
-                failed = False
-                if lis_ndims != 1:
-                    msg = f"has {lis_ndims} dimensions, instead of 1."
-                    log_meshdata("R508", msg)
-                    failed = True
-                if not failed:
-                    (lis_dim,) = lis_dims
-                    mesh_name = lis_var.attributes.get("mesh")
-                    failed = mesh_name not in self._all_mesh_dims
-                if not failed:
-                    location = lis_var.attributes.get("location")
-                    failed = location not in ("node", "edge", "face")
-                if not failed:
-                    mesh_dim = self._all_mesh_dims[mesh_name][location]
-                    if lis_dim != mesh_dim:
-                        msg = (
-                            f'has dimension "{lis_dim}", which is different '
-                            f"from the {location} dimension of the "
-                            f'"{mesh_name}" mesh, which is "{mesh_dim}".'
-                        )
-                        log_meshdata("R509", msg)
 
         else:
-            # Treat as a 'mesh' : complain about any location-index-set
+            # Treat the datavar as a 'mesh-datavar'
+            #  --> has "mesh" and "location", but no "location_index_set"
             ref_msg = self.var_ref_problem(mesh_name)
             if ref_msg:
+                # Invalid 'mesh' reference
                 msg = f'has mesh="{mesh_name}", which {ref_msg}.'
                 log_meshdata("R502", msg)
+
             if lis_name is not None:
                 msg = (
-                    "has a 'location_index_set' attribute, which is not valid "
-                    "since it also has a 'mesh' attribute."
+                    "has a 'location_index_set' attribute, which is invalid "
+                    "since it is based on a 'mesh' attribute."
                 )
                 log_meshdata("R501", msg)
+
             if location is None:
                 log_meshdata("R503", "has no 'location' attribute.")
             elif str(location) not in ("face", "edge", "node"):
@@ -888,21 +883,79 @@ class Checker:
                 )
                 log_meshdata("R504", msg)
             else:
-                # Check against the mesh, if it was valid
-                mesh_name = str(mesh_name)
-                location = str(location)
-                if mesh_name in self._all_mesh_dims:
-                    mesh_dims = self._all_mesh_dims[mesh_name]
-                    mesh_location = mesh_dims[location]
-                    if mesh_location is None:
+                # Given a valid location, check that it exists in the parent
+                if not ref_msg:
+                    parent_varname = str(mesh_name)
+                    parent_location = str(location)
+                    assert parent_varname in self._all_mesh_dims
+                    mesh_dims = self._all_mesh_dims[parent_varname]
+                    parent_dim = mesh_dims[parent_location]
+                    if parent_dim is None:
                         msg = (
-                            f'has location="{location}", which is not a '
-                            f'location in the parent mesh, "{mesh_name}".'
+                            f'has location="{location}", which is a location '
+                            "that does not exist in the parent mesh, "
+                            f'"{parent_varname}".'
                         )
                         log_meshdata("R505", msg)
 
-    def check_lis_var(self, datavar: NcVariableSummary):
-        pass
+        # Generic dimension testing, for either lis- or mesh-type datavars
+        # First check there is only 1 mesh-dim
+        data_dims = datavar.dimensions
+        data_mesh_dims = [
+            dim
+            for dim in data_dims
+            if any(
+                dim in self._all_mesh_dims[some_mesh_name].values()
+                for some_mesh_name in self._all_mesh_dims
+            )
+        ]
+        n_data_mesh_dims = len(data_mesh_dims)
+        if n_data_mesh_dims != 1:
+            msg = (
+                f"has dimensions {data_dims}, of which {n_data_mesh_dims} "
+                "are mesh dimensions, instead of 1."
+            )
+            log_meshdata("R509", msg)
+            data_meshdim = None  # cannot check against parent
+        else:
+            # We have a single element-dim : check against a parent mesh or lis
+            (data_meshdim,) = data_mesh_dims
+
+        if parent_varname and parent_location and data_meshdim:
+            # If we have a valid parent ref, and single mesh dimension of the
+            # datavar, check that they match
+            mesh_dims = self._all_mesh_dims[parent_varname]
+            parent_dim = mesh_dims[parent_location]
+            if parent_dim is not None and data_meshdim != parent_dim:
+                # Warn only if the parent_dim *exists*, but does not match
+                # N.B. missing parent dim is checked elsewhere : R505 or R404
+                if parent_varname in self._lis_vars:
+                    typename = "location_index_set"
+                else:
+                    typename = "mesh"
+                msg = (
+                    f'has the element dimension "{data_meshdim}", which does '
+                    f"not match the {parent_location} dimension of the "
+                    f'"{parent_varname}" {typename}, which is "{parent_dim}".'
+                )
+                log_meshdata("R510", msg)
+
+    def check_lis_var(self, lis_var: NcVariableSummary):
+        # TODO: proper lis-specific checks to be added here
+
+        # Add the lis element dimension into self._all_mesh_dims
+        location = str(lis_var.attributes.get("location", ""))
+        if location in ("node", "edge", "face"):
+            dims = lis_var.dimensions
+            if len(dims) == 1:
+                # Lis has a valid location and single dim
+                # So we can record 'our' dim as an element-dim
+                (lis_dim,) = dims
+                dims = self._all_mesh_dims.get(lis_var.name)
+                if dims is None:
+                    dims = {name: None for name in ("node", "edge", "face")}
+                dims[location] = lis_dim
+                self._all_mesh_dims[lis_var.name] = dims
 
     def check_dataset_inner(self):
         """
@@ -987,18 +1040,20 @@ class Checker:
         # Build a map of the dimensions of all the meshes,
         # all_meshes_dims: {meshname: {location: dimname}}
         self._all_mesh_dims = {}
+
         # Check all mesh vars
         # Note: this call also fills in 'self._all_mesh_dims'.
         for meshvar in self._mesh_vars.values():
             self.check_mesh_var(meshvar)
 
+        # Check all lis-vars
+        # Note: this call also fills in 'self._all_mesh_dims'.
+        for lis_var in self._lis_vars.values():
+            self.check_lis_var(lis_var)
+
         # Check all mesh-data vars
         for meshdata_var in self._meshdata_vars.values():
             self.check_meshdata_var(meshdata_var)
-
-        # Check all lis-vars
-        for lis_var in self._lis_vars.values():
-            self.check_lis_var(lis_var)
 
         #
         # Now check for dimensions shared between meshes - an advisory warning.

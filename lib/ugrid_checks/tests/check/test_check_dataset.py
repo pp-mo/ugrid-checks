@@ -222,20 +222,91 @@ class DatasetChecker:
                 statements = [(code, message)]
         self._expect_notes(logs, statements)
 
+    @staticmethod
+    def _add_edges(scan):
+        # Add edges and an edge-node connectivity to a 2d scan.
+        meshvar = scan.variables["topology"]
+        # Check we have the 2d scan, as 1d defines a different edges dim
+        assert meshvar.attributes["topology_dimension"] == 2
+        scan.dimensions["edges"] = NcDimSummary(5)
+        scan.dimensions["n_edge_ends"] = NcDimSummary(2)
+        edgenodes_name = "edge_nodes"
+        scan.variables[edgenodes_name] = NcVariableSummary(
+            name=edgenodes_name,
+            dimensions=["edges", "n_edge_ends"],
+            shape=(5, 2),
+            dtype=np.dtype(np.int32),
+            attributes={"cf_role": "edge_node_connectivity"},
+        )
+        meshvar.attributes["edge_node_connectivity"] = edgenodes_name
+
+    @staticmethod
+    def _convert_to_lis(scan):
+        # Convert a scan so the data is mapped via a location-index-set
+        # Should work on any of the basic 0d/1d/2d scans.
+        # Add a new location-index-set dimension, and variable
+        location = scan.variables["sample_data"].attributes["location"]
+        lis_dim_name = f"lis_{location}s"
+        scan.dimensions[lis_dim_name] = NcDimSummary(3)
+        lis_name = "lis"
+        scan.variables[lis_name] = NcVariableSummary(
+            name=lis_name,
+            dimensions=(lis_dim_name,),
+            shape=(5, 3),
+            dtype=np.dtype(np.int64),
+            attributes={
+                "cf_role": "location_index_set",
+                "mesh": "topology",
+                "location": location,
+            },
+        )
+
+        # 'Switch' the data var to reference the lis
+        data_var = scan.variables["sample_data"]
+        data_var.dimensions = (lis_dim_name,)
+        data_var.shape = (3,)
+        del data_var.attributes["mesh"]
+        del data_var.attributes["location"]
+        data_var.attributes["location_index_set"] = lis_name
+
 
 class TestChecker_Dataset(DatasetChecker):
     # Test dataset-level checking.
-    def test_basic_2d_noerror(self, scan_2d_mesh):
-        # Check that "2d" example, unmodified is all OK
-        self.check(scan_2d_mesh)
+    def test_mesh_0d_noerror(self, scan_0d_mesh):
+        # Check that "0d" example, unmodified, is all OK
+        self.check(scan_0d_mesh)
 
-    def test_basic_1d_noerror(self, scan_1d_mesh):
+    def test_mesh_1d_noerror(self, scan_1d_mesh):
         # Check that "1d" example, unmodified is all OK
         self.check(scan_1d_mesh)
 
-    def test_basic_0d_noerror(self, scan_0d_mesh):
-        # Check that "0d" example, unmodified, is all OK
+    def test_mesh_2d_noerror(self, scan_2d_mesh):
+        # Check that "2d" example, unmodified is all OK
+        self.check(scan_2d_mesh)
+
+    def test_lis_0d_noerror(self, scan_0d_mesh):
+        # Just check that we can process a simple LIS case successfully.
+        self._convert_to_lis(scan_0d_mesh)
+        data_attrs = scan_0d_mesh.variables["sample_data"].attributes
+        assert "mesh" not in data_attrs
+        assert "location_index_set" in data_attrs
         self.check(scan_0d_mesh)
+
+    def test_1d_with_lis_noerror(self, scan_1d_mesh):
+        # Check we can process a 1d LIS case (and the conversion utility works)
+        self._convert_to_lis(scan_1d_mesh)
+        data_attrs = scan_1d_mesh.variables["sample_data"].attributes
+        assert "mesh" not in data_attrs
+        assert "location_index_set" in data_attrs
+        self.check(scan_1d_mesh)
+
+    def test_2d_with_lis_noerror(self, scan_2d_mesh):
+        # Check we can process a 2d LIS case (and the conversion utility works)
+        self._convert_to_lis(scan_2d_mesh)
+        data_attrs = scan_2d_mesh.variables["sample_data"].attributes
+        assert "mesh" not in data_attrs
+        assert "location_index_set" in data_attrs
+        self.check(scan_2d_mesh)
 
     def test_a104_dataset_shared_meshdims_2(self, scan_0d_mesh):
         # Copy 'topology' mesh and all its components to 'topology_2' etc
@@ -807,6 +878,16 @@ class TestChecker_DataVariables(DatasetChecker):
     def scan_2d_and_datavar(self, scan_2d_mesh):
         return scan_2d_mesh, scan_2d_mesh.variables["sample_data"]
 
+    def test_r501_datavar_mesh_with_lis(self, scan_0d_mesh):
+        # A mesh datavar should not have a 'location_index_set' attribute.
+        meshdata_var = scan_0d_mesh.variables["sample_data"]
+        meshdata_var.attributes["location_index_set"] = "node_lat"
+        msg = (
+            "\"sample_data\" has a 'location_index_set' attribute.*"
+            r"invalid since it is based on a 'mesh' attribute\."
+        )
+        self.check(scan_0d_mesh, "R501", msg)
+
     def test_r502_datavar_empty_mesh(self, scan_2d_and_datavar):
         scan, datavar = scan_2d_and_datavar
         datavar.attributes["mesh"] = ""
@@ -837,12 +918,115 @@ class TestChecker_DataVariables(DatasetChecker):
         msg = r'mesh="absent", which is not a variable in the dataset\.'
         self.check(scan, "R502", msg)
 
-    # Test data-variable checking.
-    def test_r502_datavar_nonexistent_mesh(self, scan_2d_and_datavar):
-        scan, datavar = scan_2d_and_datavar
-        datavar.attributes["mesh"] = "other_mesh"
-        msg = r'mesh="other_mesh", which is not a variable in the dataset\.'
-        self.check(scan, "R502", msg)
+    def test_r503_datavar_mesh_no_location(self, scan_0d_mesh):
+        meshdata_var = scan_0d_mesh.variables["sample_data"]
+        del meshdata_var.attributes["location"]
+        msg = r"\"sample_data\" has no 'location' attribute\."
+        self.check(scan_0d_mesh, "R503", msg)
+
+    def test_r504_datavar_mesh_invalid_location(self, scan_0d_mesh):
+        meshdata_var = scan_0d_mesh.variables["sample_data"]
+        meshdata_var.attributes["location"] = "other"
+        msg = (
+            '"sample_data" has location="other", '
+            r'which is not one of "face", "edge" or "node"\.'
+        )
+        self.check(scan_0d_mesh, "R504", msg)
+
+    def test_r505_datavar_mesh_nonexistent_location(self, scan_0d_mesh):
+        meshdata_var = scan_0d_mesh.variables["sample_data"]
+        meshdata_var.attributes["location"] = "edge"
+        msg = (
+            '"sample_data" has location="edge", which is a location that '
+            r'does not exist in the parent mesh, "topology"\.'
+        )
+        self.check(scan_0d_mesh, "R505", msg)
+
+    @fixture
+    def scan_0d_with_lis_datavar(self, scan_0d_mesh):
+        # Produce a modified version of the 0d mesh that "interposes" a
+        # location-index-set between the "sample_data" var and the mesh.
+        self._convert_to_lis(scan_0d_mesh)
+        return scan_0d_mesh, scan_0d_mesh.variables["sample_data"]
+
+    def test_r506_datavar_lis_with_mesh(self, scan_0d_with_lis_datavar):
+        # An lis datavar should not have a 'mesh' attribute.
+        scan, data_var = scan_0d_with_lis_datavar
+        data_var.attributes["mesh"] = "topology"
+        msg = (
+            "\"sample_data\" has a 'mesh' attribute.*"
+            "invalid since it is based on a 'location_index_set' attribute."
+        )
+        self.check(scan, "R506", msg)
+
+    def test_r507_datavar_lis_with_location(self, scan_0d_with_lis_datavar):
+        # An lis datavar should not have a 'location' attribute.
+        scan, data_var = scan_0d_with_lis_datavar
+        data_var.attributes["location"] = "node"
+        msg = (
+            "\"sample_data\" has a 'location' attribute.*"
+            "invalid since it is based on a 'location_index_set' attribute."
+        )
+        self.check(scan, "R507", msg)
+
+    # NOTE: only do one of these, as the valid-reference checking mechanism is
+    # tested elsewhere : TestChecker_Coords.test_xxx_coord_bounds_yyy
+    def test_r508_datavar_lis_invalid(self, scan_0d_with_lis_datavar):
+        # The lis attribute should be a valid variable reference.
+        scan, data_var = scan_0d_with_lis_datavar
+        data_var.attributes["location_index_set"] = "$123"
+        msg = (
+            r'location_index_set="\$123", '
+            r"which is not a valid netcdf variable name\."
+        )
+        self.check(scan, "R508", msg)
+
+    def test_r509_datavar_lis_no_meshdims(self, scan_0d_with_lis_datavar):
+        scan, data_var = scan_0d_with_lis_datavar
+        assert data_var.dimensions == ("lis_nodes",)
+        data_var.dimensions = ("num_ends",)
+        msg = (
+            r"dimensions \('num_ends',\), of which "
+            r"0 are mesh dimensions, instead of 1\."
+        )
+        self.check(scan, "R509", msg)
+
+    def test_r509_datavar_lis_multi_meshdims(self, scan_0d_with_lis_datavar):
+        scan, data_var = scan_0d_with_lis_datavar
+        assert data_var.dimensions == ("lis_nodes",)
+        data_var.dimensions = ("lis_nodes", "lis_nodes")
+        msg = (
+            r"dimensions \('lis_nodes', 'lis_nodes'\), of which "
+            r"2 are mesh dimensions, instead of 1\."
+        )
+        self.check(scan, "R509", msg)
+
+    def test_r510_datavar_mesh_wrongdim(self, scan_2d_and_datavar):
+        scan, data_var = scan_2d_and_datavar
+        # Add edges so we have 2 different element dimensions to work with
+        self._add_edges(scan)
+        # Set datavar element dimension different to the parent mesh location
+        assert data_var.dimensions == ("face_dim",)
+        data_var.dimensions = ("edges",)
+        msg = (
+            'element dimension "edges", which does not match the '
+            'face dimension of the "topology" mesh, '
+            r'which is "face_dim"\.'
+        )
+        self.check(scan, "R510", msg)
+
+    def test_r510_datavar_lis_wrongdim(self, scan_2d_and_datavar):
+        scan, data_var = scan_2d_and_datavar
+        self._convert_to_lis(scan)
+        # Set datavar element dimension different to the parent mesh location
+        assert data_var.dimensions == ("lis_faces",)
+        data_var.dimensions = ("num_node",)
+        msg = (
+            'element dimension "num_node", which does not match '
+            'the face dimension of the "lis" location_index_set, '
+            r'which is "lis_faces"\.'
+        )
+        self.check(scan, "R510", msg)
 
 
 class TestChecker_Coords(DatasetChecker):
@@ -1131,22 +1315,6 @@ class TestChecker_Connectivities(DatasetChecker):
             r'of the parent mesh, "face_dim"\.'
         )
         self.check(scan, "R307", msg)
-
-    @staticmethod
-    def _add_edges(scan):
-        meshvar = scan.variables["topology"]
-        # Add edges, and an edge-node connectivity ..
-        scan.dimensions["edges"] = NcDimSummary(5)
-        scan.dimensions["n_edge_ends"] = NcDimSummary(2)
-        edgenodes_name = "edge_nodes"
-        scan.variables[edgenodes_name] = NcVariableSummary(
-            name=edgenodes_name,
-            dimensions=["edges", "n_edge_ends"],
-            shape=(5, 2),
-            dtype=np.dtype(np.int32),
-            attributes={"cf_role": "edge_node_connectivity"},
-        )
-        meshvar.attributes["edge_node_connectivity"] = edgenodes_name
 
     def test_r308_conn_bad_num_edge_ends(self, scan_2d_and_connvar):
         scan, conn = scan_2d_and_connvar
