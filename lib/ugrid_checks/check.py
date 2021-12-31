@@ -1,3 +1,4 @@
+import logging
 from logging import LogRecord
 from pathlib import Path
 import re
@@ -1156,24 +1157,34 @@ def check_dataset_inner(file_scan: NcFileSummary):
     checker.check_dataset_inner()
 
 
-def printout_reports():
-    LOG.printonly("")
-    LOG.printonly("UGRID conformance checks complete.")
+def output_report(print_func=print):
+    # Emit the output results.
+    logs = LOG.report_statement_logrecords()
+    print_func("")
+    print_func("UGRID conformance checks complete.")
+    print_func("")
     if LOG.N_FAILURES + LOG.N_WARNINGS == 0:
-        LOG.printonly("No problems found.")
+        print_func("No problems found.")
     else:
-        LOG.printonly(
-            f"Total of {LOG.N_WARNINGS + LOG.N_FAILURES} problems found: \n"
+        if logs:
+            print_func("List of checker messages :")
+            for log in logs:
+                print_func("  " + log.msg)
+            print_func("")
+        print_func(
+            f"Total of {LOG.N_WARNINGS + LOG.N_FAILURES} problems logged : \n"
             f"  {LOG.N_FAILURES} Rxxx requirement failures\n"
             f"  {LOG.N_WARNINGS} Axxx advisory recommendation warnings"
         )
-    LOG.printonly("Done.")
+    print_func("")
+    print_func("Done.")
 
 
 def check_dataset(
     file: Union[NcFileSummary, AnyStr, Path],
-    print_results: bool = True,
-    print_summary: bool = True,
+    print_results: bool = False,
+    log_summary: bool = False,
+    filter_level: int = logging.INFO,
 ) -> List[LogRecord]:
     """
     Run UGRID conformance checks on a file.
@@ -1188,17 +1199,17 @@ def check_dataset(
         path to, or representation of a netcdf input file
     print_results : bool, default=True
         whether to print warnings as they are logged
-    print_summary : bool, default=True
-        whether to print a results summary at the end
+    log_summary : bool, default=False
+        whether to add a results summary to the log record
 
     Returns
     -------
     checker_warnings : list of :class:LogRecord
-            A list of logged message records, one for each problem identified.
+            A list of log records, one for each problem identified.
     """
     LOG.reset()
-    # print_results, print_summary = True, True
     LOG.enable_reports_printout(print_results)
+    LOG.set_filter_level(filter_level)
 
     if isinstance(file, str):
         file_path = Path(file)
@@ -1211,17 +1222,9 @@ def check_dataset(
 
     check_dataset_inner(file_scan)
 
-    # dummyvar = NcVariableSummary('dummyvar', (), (), None, {}, None)
-    # LOG.state('?', 'Dummy', dummyvar, 'test warning message')
-    # LOG.state('R123', 'Dummy', dummyvar, 'failure')
-    # LOG.state('A123', 'Dummy', dummyvar, 'recommendation')
-    # report('test non-warning message')
-
-    if print_summary:
-        printout_reports()
-        print("")
-        print("Logged reports:")
-        for log_report in LOG.report_statement_logrecords():
-            print(f"  {log_report}")
+    if log_summary:
+        # Add a summary into the log record.
+        LOG.set_filter_level(logging.DEBUG)  # log the 'printonly' calls
+        output_report(print_func=LOG.printonly)
 
     return LOG.report_statement_logrecords()

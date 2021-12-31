@@ -170,7 +170,7 @@ class DatasetChecker:
     # Generic helper functions for dataset-scan testing.
     def _check_dataset(self, scan):
         # Conformance-check the given scan.
-        return check_dataset(scan, print_summary=False, print_results=False)
+        return check_dataset(scan)
 
     @staticmethod
     def _expect_notes(statements, expected_notes):
