@@ -50,9 +50,13 @@ class CheckLoggingInterface:
         """Enable/disable printing of logged messages."""
         self._ENABLE_PRINT = print_statements
 
+    def set_filter_level(self, level: int):
+        self._handler.setLevel(level)
+
     def report_statement_logrecords(self) -> List[logging.LogRecord]:
         """Return the report log as a list of :class:`~logging.LogRecords`."""
-        return self._handler.logs
+        # Note: return a list copy, as a snapshot
+        return self._handler.logs[:]
 
     def report(self, msg, level=logging.INFO, *args):
         """
