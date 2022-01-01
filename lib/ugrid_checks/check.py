@@ -287,7 +287,7 @@ class Checker:
             #
 
             # A201 should have 1-and-only-1 parent mesh : this is handled by
-            # 'check_dataset_inner', as it involves multiple meshes.
+            # 'check_dataset', as it involves multiple meshes.
 
             # A202 floating-point type
             dtype = coord.dtype
@@ -428,7 +428,7 @@ class Checker:
             #
 
             # A301 1-and-only-1 parent mesh
-            # done in 'check_dataset_inner', as it involves multiple meshes
+            # done in 'check_dataset', as it involves multiple meshes
 
             if conn_var.dtype.kind != "i":
                 msg = (
@@ -622,7 +622,7 @@ class Checker:
                     )
                     log_meshvar(errcode, msg)
                 elif is_conn and len(var_names) != 1:
-                    # "R108.a"
+                    # "R106.a"
                     msg = (
                         f'has {attr}="{var_names!r}", which contains '
                         f"{len(var_names)} names, instead of 1."
@@ -653,7 +653,7 @@ class Checker:
                     if len(coord_var.dimensions) > 0:
                         mesh_dims["node"] = coord_var.dimensions[0]
 
-        def deduce_face_or_edge_dim(location):
+        def deduce_element_dim(location):
             # Identify the dim, and check consistency of relevant attributes.
             # If found, set it in 'mesh_dims'
             dimattr_name = f"{location}_dimension"
@@ -705,10 +705,10 @@ class Checker:
                     if len(conn_var.dimensions) > 0:
                         mesh_dims[location] = conn_var.dimensions[0]
 
-        deduce_face_or_edge_dim("node")
-        deduce_face_or_edge_dim("boundary")
-        deduce_face_or_edge_dim("edge")
-        deduce_face_or_edge_dim("face")
+        deduce_element_dim("node")
+        deduce_element_dim("boundary")
+        deduce_element_dim("edge")
+        deduce_element_dim("face")
 
         # Check that, if any connectivities have non-standard dim order, then a
         # dimension attribute exists.
@@ -958,18 +958,11 @@ class Checker:
                 dims[location] = lis_dim
                 self._all_mesh_dims[lis_var.name] = dims
 
-    def check_dataset_inner(self):
+    def check_dataset(self):
         """
-        Run UGRID conformance checks on a representation of a file.
+        Run all conformance checks on the contained file scan.
 
-        This low-level routine operates on an abstract "file-scan"
-        representation, rather than a real file.
-        All checking messages are recorded with :meth:`LOG.state`.
-
-        Parameters
-        ----------
-        file_scan : :class:`NcFileSummary`
-            representation of a netcdf file to check
+        All results logged via :data:`LOG.state`.
 
         """
         #
@@ -1154,7 +1147,7 @@ def check_dataset_inner(file_scan: NcFileSummary):
 
     """
     checker = Checker(file_scan)
-    checker.check_dataset_inner()
+    checker.check_dataset()
 
 
 def output_report(print_func=print):
@@ -1191,7 +1184,7 @@ def check_dataset(
 
     Log statements regarding any problems found to the :data:`_LOG` logger.
     Return the accumulated log records of problems found.
-    Optionally print logger messages and/or a summary of results.
+    Optionally print logger messages and/or log a summary of results.
 
     Parameters
     ----------

@@ -390,16 +390,14 @@ class TestChecker_MeshVariables(DatasetChecker):
         # This is always caused by a subsidiary specific error, so for testing
         # it doesn't much matter which we choose.
         meshvar.attributes["node_coordinates"] = 3
+        msg = (
+            "\"topology\" attribute 'node_coordinates'.*"
+            "does not have string type"
+        )
         self.check(
             scan,
             statements=[
-                (
-                    "R105",
-                    (
-                        "\"topology\" attribute 'node_coordinates'.*"
-                        "does not have string type"
-                    ),
-                ),
+                ("R105", msg),
                 ("R107", '"topology".*not a list of variables in the dataset'),
             ],
         )
@@ -407,16 +405,14 @@ class TestChecker_MeshVariables(DatasetChecker):
     def test_r105_r107_mesh_badcoordattr_empty(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = ""
+        msg = (
+            '"topology" attribute \'node_coordinates\' = "".*'
+            "is not a valid list of netcdf variable"
+        )
         self.check(
             scan,
             statements=[
-                (
-                    "R105",
-                    (
-                        '"topology" attribute \'node_coordinates\' = "".*'
-                        "is not a valid list of netcdf variable"
-                    ),
-                ),
+                ("R105", msg),
                 ("R107", '"topology".*not a list of variables'),
             ],
         )
@@ -426,36 +422,47 @@ class TestChecker_MeshVariables(DatasetChecker):
     ):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = "$123"
+        msg = (
+            r'"topology" attribute \'node_coordinates\'.*"\$123"'
+            ".*not a valid netcdf variable name"
+        )
         self.check(
             scan,
             statements=[
-                (
-                    "R105",
-                    (
-                        r'"topology" attribute \'node_coordinates\'.*"\$123"'
-                        ".*not a valid netcdf variable name"
-                    ),
-                ),
+                ("R105", msg),
                 ("R107", '"topology".*not a list of variables'),
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_missingvar(self, scan_2d_and_meshvar):
+    def test_r106_r107_mesh_badcoordattr_missingvar(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
-        meshvar.attributes["node_coordinates"] = "$123"
+        meshvar.attributes["node_coordinates"] = "unknown"
+        msg = (
+            r'\'node_coordinates\' refers to a variable "unknown", '
+            r"but there is no such variable in the dataset\."
+        )
         self.check(
             scan,
             statements=[
-                (
-                    "R105",
-                    (
-                        r'"topology" attribute \'node_coordinates\'.*"\$123"'
-                        ".*not a valid netcdf variable name"
-                    ),
-                ),
+                ("R106", msg),
                 ("R107", '"topology".*not a list of variables in the dataset'),
             ],
         )
+
+    def test_r106a_mesh_badconn_multiplevars(self, scan_2d_and_meshvar):
+        scan, meshvar = scan_2d_and_meshvar
+        # Checking for multiple entries in a connectivity attribute.
+        # Create extra custom variables, copying 'node_lat'
+        next_var(scan, "node_lat")
+        next_var(scan, "node_lat_2")
+        # point a connectivity at those
+        meshvar.attributes["face_node_connectivity"] = "node_lat_2 node_lat_3"
+
+        msg = (
+            "face_node_connectivity=\"\\['node_lat_2', 'node_lat_3'\\]\""
+            ", which contains 2 names, instead of 1."
+        )
+        self.check(scan, "", msg)
 
     def test_r108_mesh_badconn_empty(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
@@ -482,21 +489,6 @@ class TestChecker_MeshVariables(DatasetChecker):
                 ),
             ],
         )
-
-    def test_r108a_mesh_badconn_multiplevars(self, scan_2d_and_meshvar):
-        scan, meshvar = scan_2d_and_meshvar
-        # Checking for multiple entries in a connectivity attribute.
-        # Create extra custom variables, copying 'node_lat'
-        next_var(scan, "node_lat")
-        next_var(scan, "node_lat_2")
-        # point a connectivity at those
-        meshvar.attributes["face_node_connectivity"] = "node_lat_2 node_lat_3"
-
-        msg = (
-            "face_node_connectivity=\"\\['node_lat_2', 'node_lat_3'\\]\""
-            ", which contains 2 names, instead of 1."
-        )
-        self.check(scan, "", msg)
 
     def test_r109_mesh_missing_node_coords(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
