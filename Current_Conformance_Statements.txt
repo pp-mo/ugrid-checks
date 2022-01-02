@@ -1,17 +1,18 @@
 mesh variable
 - <a id="R101" href="#R101">R101</a> it must have a `cf_role` attribute,
 - <a id="R102" href="#R102">R102</a> with the value `"mesh_topology"`
-R102.a : invalid "cf_role" of a mesh-variable
-- <a id="R103" href="#R103">R103</a> it must have a `topology_dimension` attribute, 
+- <a id="R103" href="#R103">R103</a> it must have a `topology_dimension` attribute,
 - <a id="R104" href="#R104">R104</a> whose value is an integer between 0 and 2. [^4] [^5]
 - <a id="R105" href="#R105">R105</a> they are strings consisting of space-separated, valid netcdf variable names, and
 - <a id="R106" href="#R106">R106</a> the variables named all exist in the dataset
-- <a id="R107" href="#R107">R107</a> all elements of all mesh coordinate attributes must be
-- <a id="R108" href="#R108">R108</a> all elements of all mesh connectivity attributes must be
-- <a id="R109" href="#R109">R109</a> it must have a `node_coordinates` attribute
-- <a id="R110" href="#R110">R110</a> edge_node_connectivity *must not* be present, if `topology_dimension` is 0. [^5]
-- <a id="R111" href="#R111">R111</a> edge_node_connectivity *must* be present, if `topology_dimension` is 1.
-- <a id="R112" href="#R112">R112</a> edge_node_connectivity *may* be present, if `topology_dimension` is 2.
+=>R107  ++R106.a mesh connectivity attributes must contain only one variable name
+=>R108  - <a id="R107" href="#R107">R107</a> all elements of all mesh coordinate attributes must be
+=>R109 - <a id="R108" href="#R108">R108</a> all elements of all mesh connectivity attributes must be valid mesh connectivities
+         R108.x --> xx(all elements of)xx all mesh connectivity attributes must be valid mesh connectivities
+=>R110  - <a id="R109" href="#R109">R109</a> it must have a `node_coordinates` attribute
+=>R111  - <a id="R110" href="#R110">R110</a> edge_node_connectivity *must not* be present, if `topology_dimension` is 0. [^5]
+=>R112  - <a id="R111" href="#R111">R111</a> edge_node_connectivity *must* be present, if `topology_dimension` is 1.
+=> -x-  - <a id="R112" href="#R112">R112</a> edge_node_connectivity *may* be present, if `topology_dimension` is 2.
 XXX : R112 to be to removed
 - <a id="R113" href="#R113">R113</a> if and only if topology_dimension is 2, a `face_node_connectivity` attribute must be present
 - <a id="R114" href="#R114">R114</a> only if topology_dimension is 2, a `boundary_node_connectivity` attribute may be present,
@@ -22,13 +23,17 @@ XXX : R112 to be to removed
 - <a id="R119" href="#R119">R119</a> a `face_face_connectivity` attribute may only exist
 - <a id="R120" href="#R120">R120</a> a `face_edge_connectivity` attribute may only exist
 - <a id="R121" href="#R121">R121</a> an `edge_face_connectivity` attribute may only exist
+++R122 : a "face_dimension" attribute may only exist if the mesh has a face dimension
+++R123 : an "edge_dimension" attribute may only exist if the mesh has an edge dimension
+
 ---
 - <a id="A101" href="#A101">A101</a> it should have no dimensions
 - <a id="A102" href="#A102">A102</a> it should not have a `standard_name` attribute
 - <a id="A103" href="#A103">A103</a> it should not have a `units` attribute
 - <a id="A104" href="#A104">A104</a> it should not share any of its element dimensions with other meshes
-A105 : "boundary_dimension" is not a valid UGRID term
-A106 : "boundary_coordinates" is not a valid UGRID term
+++A105 : if it has multiple element dimensions, they should all be different
+++A106 : it should not have any attributes ending in "_connectivity", "_coordinates" or "_dimension", which are not valid UGRID terms
+[^note] this includes various 'lookalike' terms which are not defined, such as "node_face_connectivity", "boundary_coordinates", "boundary_dimension" or "node_dimension"
 
 coordinate variable
 - <a id="R201" href="#R201">R201</a> it must map a single dimension
@@ -50,6 +55,11 @@ connectivity variable
 - <a id="R306" href="#R306">R306</a> the other is not an element dimension
 - <a id="R307" href="#R307">R307</a> its element dimension must be that of the _first_ location named in its `cf_role`
 - <a id="R308" href="#R308">R308</a> if it has a `cf_role` of `edge_node_connectivity` or `boundary_node_connectivity`,  then its non-element dimension must have length 2
+R307.x [[ref footnote [^] ]]
+R308.x [[ref footnote [^] ]]
++[^] for checking purposes, the identity of a connectivity is actually defined by the referring attribute in the parent mesh.
+   However, if the connectivity is correctly formed then its `cf_role` value will be the same as this (cf. R303).
+
 - <a id="R309" href="#R309">R309</a> any `start_index` attribute must have one of the values (0, 1).
 - <a id="R310" href="#R310">R310</a> if it has a `cf_role` ending in `_node_connectivity`, , then it must not contain any 'missing' indices
 ---
@@ -64,17 +74,24 @@ connectivity variable
 
 location index set variable
 - <a id="R401" href="#R401">R401</a> it must have a `cf_role` attribute with the value `"location_index_set"`
-- <a id="R402" href="#R402">R402</a> it must have a `mesh` attribute,
+- <a id="R402" href="#R402">R402</a> it must have a `mesh` attribute, [[valid]]
 - <a id="R403" href="#R403">R403</a> it must have a `location` attribute, which is one of `face`, `edge` or `node`, and 
 - <a id="R404" href="#R404">R404</a> the corresponding location must exist in the parent mesh
+R404.x the corresponding location must exist in its indicated mesh [^]
 - <a id="R405" href="#R405">R405</a> it must have a single dimension
+++R406 any `start_index` attribute must have one of the values (0, 1).
 ---
-- <a id="A401" href="#A401">A401</a> it should have an integral type
+- <a id="A401" href="#A401">A401</a> it should have an integer type
 - <a id="A402" href="#A402">A402</a> it should not contain any missing points
 - <a id="A403" href="#A403">A403</a> it should not have a `_FillValue` attribute
-- <a id="A404" href="#A404">A404</a> the length of its single dimension should be less than or equal to the corresponding
-- <a id="A405" href="#A405">A405</a> its values should all be distinct, and 
-- <a id="A406" href="#A406">A406</a> they should all be valid indexes into the relevant element dimension
+- <a id="A404" href="#A404">A404</a> the length of its single dimension should be less than or equal to the corresponding element dimension of its parent mesh
+A404.x the length of its single dimension should be less than or equal to the corresponding element dimension of its [[indicated]][^] mesh
+- <a id="A405" href="#A405">A405</a> its values should all be distinct, and
+- <a id="A406" href="#A406">A406</a> they should all be valid indexes into the relevant element dimension of its parent mesh
+A406.x they should all be valid indexes into the relevant element dimension of its [[indicated]][^] mesh
++[^] by the 'indicated mesh' of a location-index-set, we mean the mesh named in its `mesh` attribute
+++A407 any `start_index` attribute should have the same type as the [[location-index-set]] variable itself
+    [[~identical to A303]]
 
 mesh data variable
 with MESH
@@ -95,3 +112,8 @@ miscellaneous
 - <a id="A902" href="#A902">A902</a> there should be a global `Conventions` attribute,
 - <a id="A903" href="#A903">A903</a> which contains a string section of the form `UGRID-<X.Y>`,
 - <a id="A904" href="#A904">A904</a> no data variable should have a `cf_role` of any of the types defined here,
+A904.x no [[netcdf]] variable should have a `cf_role` of any of the types defined here,
+++A905 all dataset variables should only have "cf-role" attributes which are _either_ one of the valid terms described here,
+  _or_ one of the CF-defined cf_role terms [^]
+  [^] at present (ref. CF version) the only 'cf_role's defined by CF are the discrete-geometry types : "timeseries_id", "profile_id" and "trajectory_id"
+
