@@ -870,15 +870,23 @@ class TestChecker_DataVariables(DatasetChecker):
     def scan_2d_and_datavar(self, scan_2d_mesh):
         return scan_2d_mesh, scan_2d_mesh.variables["sample_data"]
 
-    def test_r501_datavar_mesh_with_lis(self, scan_0d_mesh):
-        # A mesh datavar should not have a 'location_index_set' attribute.
-        meshdata_var = scan_0d_mesh.variables["sample_data"]
-        meshdata_var.attributes["location_index_set"] = "node_lat"
+    def test_r501_datavar_mesh_with_lis(self, scan_2d_mesh):
+        # Add an lis and convert the original var to it.
+        self._convert_to_lis(scan_2d_mesh)
+        # The data-var was modified to reference the lis + its dim.
+        # Reinstate the original mesh-basis, but leave the lis reference in
+        # place to trigger the intended error.
+        data_var = scan_2d_mesh.variables["sample_data"]
+        assert str(data_var.attributes["location_index_set"]) == "lis"
+        data_var.attributes["mesh"] = "topology"
+        data_var.attributes["location"] = "face"
+        assert data_var.dimensions == ("lis_faces",)
+        data_var.dimensions = ("face_dim",)
         msg = (
             "\"sample_data\" has a 'location_index_set' attribute.*"
             r"invalid since it is based on a 'mesh' attribute\."
         )
-        self.check(scan_0d_mesh, "R501", msg)
+        self.check(scan_2d_mesh, "R501", msg)
 
     def test_r502_datavar_empty_mesh(self, scan_2d_and_datavar):
         scan, datavar = scan_2d_and_datavar
@@ -1220,7 +1228,7 @@ class TestChecker_Coords(DatasetChecker):
         coord.dtype = np.dtype(np.int32)
         msg = (
             'variable "node_lon" within topology:node_coordinates has '
-            r'dtype "int32", which is not floating-point\.'
+            r'type "int32", which is not floating-point\.'
         )
         self.check(scan, "A202", msg)
 
@@ -1323,7 +1331,7 @@ class TestChecker_Connectivities(DatasetChecker):
         scan, conn = scan_2d_and_connvar
         conn.attributes["start_index"] = np.array(3, dtype=conn.dtype)
         msg = (
-            '"face_nodes".* has a start_index of "3", '
+            '"face_nodes".* has start_index="3", '
             r"which is not either 0 or 1\."
         )
         self.check(scan, "R309", msg)
@@ -1358,7 +1366,7 @@ class TestChecker_Connectivities(DatasetChecker):
         # N.B. also adjust dtype of start_index, to avoid an A303
         conn.attributes["start_index"] = np.array(0.0, dtype=conn.dtype)
         msg = (
-            '"face_nodes".* has dtype "float32", '
+            '"face_nodes".* has type "float32", '
             r"which is not an integer type\."
         )
         self.check(scan, "A302", msg)
@@ -1367,8 +1375,8 @@ class TestChecker_Connectivities(DatasetChecker):
         scan, conn = scan_2d_and_connvar
         conn.attributes["start_index"] = np.array(1.0)
         msg = (
-            'start_index of dtype "float64".* different from the '
-            'variable dtype, "int32"'
+            'start_index of type "float64".* different from the '
+            'variable type, "int32"'
         )
         self.check(scan, "A303", msg)
 
@@ -1405,8 +1413,8 @@ class TestChecker_Connectivities(DatasetChecker):
         conn = scan_2d_mesh.variables["face_edges"]
         conn.attributes["_FillValue"] = np.array(-1, dtype=np.int16)
         msg = (
-            '"face_edges".* has a _FillValue of dtype "int16", '
-            r'which is different from the variable dtype, "int32"\.'
+            '"face_edges".* has a _FillValue of type "int16", '
+            r'which is different from the variable type, "int32"\.'
         )
         self.check(scan_2d_mesh, "A306", msg)
 

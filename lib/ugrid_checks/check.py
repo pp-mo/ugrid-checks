@@ -294,7 +294,7 @@ class Checker:
             if dtype.kind != "f":
                 log_coord(
                     "A202",
-                    f'has dtype "{dtype}", which is not floating-point.',
+                    f'has type "{dtype}", which is not floating-point.',
                 )
 
             # A203 standard-name : has+valid (can't handle fully ??)
@@ -412,7 +412,7 @@ class Checker:
                 # since a non-integral type triggers an A302 warning anyway.
                 if int(index_value) not in (0, 1):
                     msg = (
-                        f'has a start_index of "{index_value}", which is not '
+                        f'has start_index="{index_value}", which is not '
                         "either 0 or 1."
                     )
                     log_conn("R309", msg)
@@ -432,15 +432,15 @@ class Checker:
 
             if conn_var.dtype.kind != "i":
                 msg = (
-                    f'has dtype "{conn_var.dtype}", '
+                    f'has type "{conn_var.dtype}", '
                     "which is not an integer type."
                 )
                 log_conn("A302", msg)
 
             if index_value is not None and index_value.dtype != conn_var.dtype:
                 msg = (
-                    f'has a start_index of dtype "{index_value.dtype}", '
-                    "which is different from the variable dtype, "
+                    f'has a start_index of type "{index_value.dtype}", '
+                    "which is different from the variable type, "
                     f'"{conn_var.dtype}".'
                 )
                 log_conn("A303", msg)
@@ -463,8 +463,8 @@ class Checker:
 
             if fill_value is not None and fill_value.dtype != conn_var.dtype:
                 msg = (
-                    f'has a _FillValue of dtype "{fill_value.dtype}", '
-                    "which is different from the variable dtype, "
+                    f'has a _FillValue of type "{fill_value.dtype}", '
+                    "which is different from the variable type, "
                     f'"{conn_var.dtype}".'
                 )
                 log_conn("A306", msg)
@@ -538,7 +538,7 @@ class Checker:
             # independently, and then cross-check.
             if topology_dimension not in (0, 1, 2):
                 msg = (
-                    f'has "topology_dimension={topology_dimension}", '
+                    f'has topology_dimension="{topology_dimension}", '
                     "which is not 0, 1 or 2."
                 )
                 log_meshvar("R104", msg)
@@ -942,7 +942,7 @@ class Checker:
                 log_meshdata("R510", msg)
 
     def check_lis_var(self, lis_var: NcVariableSummary):
-        # TODO: proper lis-specific checks to be added here
+        """Validity-check a location-index-set variable."""
 
         # Add the lis element dimension into self._all_mesh_dims
         location = str(lis_var.attributes.get("location", ""))
@@ -957,6 +957,135 @@ class Checker:
                     dims = {name: None for name in ("node", "edge", "face")}
                 dims[location] = lis_dim
                 self._all_mesh_dims[lis_var.name] = dims
+
+        def log_lis(errcode, msg):
+            LOG.state(errcode, "location-index-set", lis_var.name, msg)
+
+        cf_role = lis_var.attributes.get("cf_role")
+        if cf_role is None:
+            log_lis("R401", "has no 'cf_role' attribute.")
+        elif cf_role != "location_index_set":
+            msg = f'has cf_role="{cf_role}", instead of "location_index_set".'
+            log_lis("R401", msg)
+
+        mesh_var = None  # Used to skip additional checks when mesh is bad
+        mesh_name = lis_var.attributes.get("mesh")
+        if mesh_name is not None:
+            msg_ref = self.var_ref_problem(mesh_name)
+            if msg_ref:
+                msg = f'has mesh="{mesh_name}", which {msg_ref}.'
+                log_lis("R402", msg)
+            else:
+                mesh_name = str(mesh_name)
+                mesh_var = self._mesh_vars.get(mesh_name)
+                if mesh_var is None:
+                    msg = (
+                        f'has mesh="{mesh_name}", '
+                        "which is not a valid mesh variable."
+                    )
+                    log_lis("R402", msg)
+
+        location = lis_var.attributes.get("location")
+        parent_dim = None
+        if location is None:
+            log_lis("R403", "has no 'location' attribute.")
+        elif str(location) not in ("face", "edge", "node"):
+            msg = (
+                f'has location="{location}", which is not one of '
+                '"face", "edge" or "node".'
+            )
+            log_lis("R403", msg)
+        elif mesh_var:
+            # check the location exists in the parent mesh
+            location = str(location)
+            mesh_dims = self._all_mesh_dims[mesh_name]
+            parent_dim = mesh_dims[location]
+            if parent_dim is None:
+                msg = (
+                    f'has location="{location}", which is a location '
+                    "that does not exist in the indicated mesh, "
+                    f'"{mesh_name}".'
+                )
+                log_lis("R404", msg)
+                # Don't attempt any further checks against the mesh
+                mesh_var = None
+
+        lis_dims = lis_var.dimensions
+        n_lis_dims = len(lis_dims)
+        if n_lis_dims != 1:
+            msg = (
+                f"has dimensions {lis_dims!r}, of which there are "
+                f"{n_lis_dims} instead of 1."
+            )
+            log_lis("R405", msg)
+        else:
+            (lis_dim,) = lis_dims
+
+        index_value = lis_var.attributes.get("start_index")
+        if index_value is not None:
+            # Note: check value, converted to int.
+            # This avoids an extra warning for strings like "0", "1",
+            # since a non-integral type triggers an A407 warning anyway.
+            if int(index_value) not in (0, 1):
+                msg = (
+                    f'has start_index="{index_value}", which is not '
+                    "either 0 or 1."
+                )
+                log_lis("R406", msg)
+
+        #
+        # Advisory checks
+        #
+        if lis_var.dtype.kind != "i":
+            msg = f'has type "{lis_var.dtype}", which is not an integer type.'
+            log_lis("A401", msg)
+
+        if self.do_data_checks:
+            # TODO: data checks
+            log_lis("A402", "contains missing indices.")
+
+        if "_FillValue" in lis_var.attributes:
+            msg = (
+                "has a _FillValue attribute, which should not be present "
+                "on a location-index-set."
+            )
+            log_lis("A403", msg)
+
+        if mesh_var:
+            len_lis = self.file_scan.dimensions[lis_dim].length
+            len_parent = self.file_scan.dimensions[parent_dim].length
+            if len_lis >= len_parent:
+                msg = (
+                    f'has dimension "{lis_dim}", length {len_lis}, which is '
+                    f"longer than the {location} dimension of the indicated "
+                    f'mesh "{mesh_name}" : '
+                    f'"{parent_dim}", length {len_parent}.'
+                )
+                log_lis("A404", msg)
+
+        if self.do_data_checks:
+            # TODO: data checks
+            msg = "contains repeated index values."
+            log_lis(
+                "A405",
+            )
+            if mesh_var:
+                msg = (
+                    "contains index values which are outside the range of the "
+                    f'indicated mesh "{mesh_name}" {location} dimension, '
+                    f' : "{parent_dim}", range 1..{len_parent}.'
+                )
+                log_lis(
+                    "A406",
+                )
+
+        if index_value is not None and index_value.dtype != lis_var.dtype:
+            msg = (
+                f'has a start_index of type "{index_value.dtype}", '
+                "which is different from the variable type, "
+                f'"{lis_var.dtype}".'
+            )
+            log_lis("A407", msg)
 
     def check_dataset(self):
         """
