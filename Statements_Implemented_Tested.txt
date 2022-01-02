@@ -76,16 +76,16 @@ A405
 A406
 
 mesh data variable
-R501
+R501    i   t
 R502    i   t
-R503
-R504
-R505
-R506
-R507
-R508
-R509
-R510
+R503    i   t
+R504    i   t
+R505    i   t
+R506    i   t
+R507    i   t
+R508    i   t
+R509    i   t
+R510    i   t
 
 miscellaneous
 A901
