@@ -1391,7 +1391,7 @@ class TestChecker_Connectivities(DatasetChecker):
         scan, conn = scan_2d_and_connvar
         conn.attributes["start_index"] = np.array(1.0)
         msg = (
-            'start_index of type "float64".* different from the '
+            "a 'start_index' of type \"float64\".* different from the "
             'variable type, "int32"'
         )
         self.check(scan, "A303", msg)
@@ -1429,7 +1429,7 @@ class TestChecker_Connectivities(DatasetChecker):
         conn = scan_2d_mesh.variables["face_edges"]
         conn.attributes["_FillValue"] = np.array(-1, dtype=np.int16)
         msg = (
-            '"face_edges".* has a _FillValue of type "int16", '
+            '"face_edges".* has a \'_FillValue\' of type "int16", '
             r'which is different from the variable type, "int32"\.'
         )
         self.check(scan_2d_mesh, "A306", msg)
@@ -1444,3 +1444,139 @@ class TestChecker_Connectivities(DatasetChecker):
         self.check(scan_2d_mesh, "A307", msg)
 
     # A308 checks values within the dim range -- not yet implemented
+
+
+class TestChecker_LocationIndexSets(DatasetChecker):
+    @fixture
+    def scan_0d_and_lis(self, scan_0d_mesh):
+        self._convert_to_lis(scan_0d_mesh)
+        return scan_0d_mesh, scan_0d_mesh.variables["lis"]
+
+    def test_basic_scan_ok(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        self.check(scan)
+
+    def test_r401_conn_missing_cfrole(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        del lis_var.attributes["cf_role"]
+        self.check(scan, "R401", r'"lis" has no \'cf_role\' attribute\.')
+
+    def test_r401_conn_bad_cfrole(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        # Set a bad cf_role.  Use a valid CF one, to avoid any further error.
+        lis_var.attributes["cf_role"] = "profile_id"
+        msg = (
+            '"lis" has cf_role="profile_id", '
+            r'instead of "location_index_set"\.'
+        )
+        self.check(scan, "R401", msg)
+
+    def test_r402_conn_missing_mesh(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        del lis_var.attributes["mesh"]
+        self.check(scan, "R402", r'"lis" has no \'mesh\' attribute\.')
+
+    def test_r402_conn_bad_mesh(self, scan_0d_and_lis):
+        # Just test *one* of the reasons handled by 'var_ref_problem'
+        scan, lis_var = scan_0d_and_lis
+        lis_var.attributes["mesh"] = "not_included"
+        msg = (
+            '"lis" has mesh="not_included", which '
+            r"is not a variable in the dataset\."
+        )
+        self.check(scan, "R402", msg)
+
+    def test_r403_conn_missing_location(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        del lis_var.attributes["location"]
+        self.check(scan, "R403", r'"lis" has no \'location\' attribute\.')
+
+    def test_r403_conn_invalid_location(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        lis_var.attributes["location"] = "something"
+        msg = (
+            '"lis" has location="something", which is not one of '
+            r'"face", "edge" or "node"\.'
+        )
+        self.check(scan, "R403", msg)
+
+    def test_r404_conn_bad_location(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        lis_var.attributes["location"] = "edge"
+        msg = (
+            '"lis" has location="edge", which.*'
+            r'does not exist in the indicated mesh, "topology"\.'
+        )
+        self.check(scan, "R404", msg)
+
+    def test_r405_conn_no_dims(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        # Set the lis to have no dimensions
+        lis_var.dimensions = ()
+        # Also remove the data-var, to avoid additional errors.
+        del scan.variables["sample_data"]
+        msg = r'"lis" has dimensions \(\), of which there are 0 instead of 1\.'
+        self.check(scan, "R405", msg)
+
+    def test_r405_conn_extra_dims(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        # Set the lis to have 2 dimensions
+        lis_var.dimensions = ("lis_nodes", "num_ends")
+        # Also remove the data-var, to avoid additional errors.
+        del scan.variables["sample_data"]
+        msg = (
+            r"\"lis\" has dimensions \('lis_nodes', 'num_ends'\), of which "
+            r"there are 2 instead of 1\."
+        )
+        self.check(scan, "R405", msg)
+
+    def test_r406_conn_bad_start_index(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        # Set the lis to have an invalid start_index
+        lis_var.attributes["start_index"] = 3
+        msg = r'"lis" has start_index="3", which is not either 0 or 1\.'
+        self.check(scan, "R406", msg)
+
+    #
+    # Advisory checks
+    #
+
+    def test_a401_conn_bad_dtype(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        lis_var.dtype = np.dtype(np.float32)
+        msg = r'"lis" has type "float32", which is not an integer type\.'
+        self.check(scan, "A401", msg)
+
+    # A402 : no missing data -- not doing data checks yet
+
+    def test_a403_conn_with_fillvalue(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        lis_var.attributes["_FillValue"] = -1
+        msg = (
+            "\"lis\" has a '_FillValue' attribute, which should not be "
+            r"present on a location-index-set\."
+        )
+        self.check(scan, "A403", msg)
+
+    def test_a404_conn_dim_longerthanparent(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        scan.dimensions["lis_nodes"] = NcDimSummary(17)
+        msg = (
+            '"lis" has dimension "lis_nodes", length 17.*'
+            "longer than the node dimension of the indicated "
+            r'mesh "topology" : "num_node", length 8\.'
+        )
+        self.check(scan, "A404", msg)
+
+    # R405 : distinct values -- not checking data values yet
+    # R406 : valid indices -- not checking data values yet
+
+    def test_a407_conn_start_index_badtype(self, scan_0d_and_lis):
+        scan, lis_var = scan_0d_and_lis
+        # Set the lis to have an invalid start_index
+        lis_var.attributes["start_index"] = np.array(1, dtype=np.float16)
+        msg = (
+            '"lis" has a \'start_index\' of type "float16", '
+            r'which is different from the variable type, "int64"\.'
+        )
+        self.check(scan, "A407", msg)

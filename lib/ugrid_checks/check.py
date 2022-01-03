@@ -16,6 +16,12 @@ from .ugrid_logger import LOG
 
 __all__ = ["check_dataset"]
 
+_VALID_UGRID_LOCATIONS = [
+    "node",
+    "edge",
+    "face",  # Not supporting 'volume' at present
+]
+
 _VALID_CONNECTIVITY_ROLES = [
     "edge_node_connectivity",
     "face_node_connectivity",
@@ -31,7 +37,7 @@ _VALID_UGRID_CF_ROLES = [
 ] + _VALID_CONNECTIVITY_ROLES
 
 _VALID_MESHCOORD_ATTRS = [
-    f"{location}_coordinates" for location in ("face", "edge", "node")
+    f"{location}_coordinates" for location in _VALID_UGRID_LOCATIONS
 ]
 
 _VALID_CF_CF_ROLES = [
@@ -465,7 +471,7 @@ class Checker:
 
         if index_value is not None and index_value.dtype != conn_var.dtype:
             msg = (
-                f'has a start_index of type "{index_value.dtype}", '
+                f"has a 'start_index' of type \"{index_value.dtype}\", "
                 "which is different from the variable type, "
                 f'"{conn_var.dtype}".'
             )
@@ -490,7 +496,7 @@ class Checker:
 
         if fill_value is not None and fill_value.dtype != conn_var.dtype:
             msg = (
-                f'has a _FillValue of type "{fill_value.dtype}", '
+                f"has a '_FillValue' of type \"{fill_value.dtype}\", "
                 "which is different from the variable type, "
                 f'"{conn_var.dtype}".'
             )
@@ -894,6 +900,8 @@ class Checker:
                 # NOTE: we are not checking the lis-var here, only the datavar,
                 # so just get a value that works if the lis is valid.
                 parent_location = str(lis_var.attributes.get("location", ""))
+                if parent_location not in _VALID_UGRID_LOCATIONS:
+                    parent_location = None
 
             if mesh_name is not None:
                 msg = (
@@ -927,10 +935,10 @@ class Checker:
 
             if location is None:
                 log_meshdata("R503", "has no 'location' attribute.")
-            elif str(location) not in ("face", "edge", "node"):
+            elif str(location) not in _VALID_UGRID_LOCATIONS:
                 msg = (
                     f'has location="{location}", which is not one of '
-                    '"face", "edge" or "node".'
+                    f'"face", "edge" or "node".'
                 )
                 log_meshdata("R504", msg)
             else:
@@ -940,7 +948,7 @@ class Checker:
                     parent_location = str(location)
                     assert parent_varname in self._all_mesh_dims
                     mesh_dims = self._all_mesh_dims[parent_varname]
-                    parent_dim = mesh_dims[parent_location]
+                    parent_dim = mesh_dims.get(parent_location)
                     if parent_dim is None:
                         msg = (
                             f'has location="{location}", which is a location '
@@ -995,18 +1003,18 @@ class Checker:
         """Validity-check a location-index-set variable."""
 
         # Add the lis element dimension into self._all_mesh_dims
-        location = str(lis_var.attributes.get("location", ""))
-        if location in ("node", "edge", "face"):
-            dims = lis_var.dimensions
-            if len(dims) == 1:
-                # Lis has a valid location and single dim
-                # So we can record 'our' dim as an element-dim
-                (lis_dim,) = dims
-                dims = self._all_mesh_dims.get(lis_var.name)
-                if dims is None:
-                    dims = {name: None for name in ("node", "edge", "face")}
-                dims[location] = lis_dim
-                self._all_mesh_dims[lis_var.name] = dims
+        dims = lis_var.dimensions
+        if len(dims) == 1:
+            # Lis has a valid location and single dim
+            # So we can record 'our' dim as an element-dim
+            (lis_dim,) = dims
+            # Note: record this under **all** locations.
+            # Since we want to recognise this as a 'mesh dim', even if the lis
+            # has an invalid mesh or location, and we don't use this to check
+            # it against the parent element dim.
+            self._all_mesh_dims[lis_var.name] = {
+                name: lis_dim for name in _VALID_UGRID_LOCATIONS
+            }
 
         def log_lis(errcode, msg):
             LOG.state(errcode, "location-index-set", lis_var.name, msg)
@@ -1020,7 +1028,9 @@ class Checker:
 
         mesh_var = None  # Used to skip additional checks when mesh is bad
         mesh_name = lis_var.attributes.get("mesh")
-        if mesh_name is not None:
+        if mesh_name is None:
+            log_lis("R402", "has no 'mesh' attribute.")
+        else:
             msg_ref = self.var_ref_problem(mesh_name)
             if msg_ref:
                 msg = f'has mesh="{mesh_name}", which {msg_ref}.'
@@ -1039,7 +1049,7 @@ class Checker:
         parent_dim = None
         if location is None:
             log_lis("R403", "has no 'location' attribute.")
-        elif str(location) not in ("face", "edge", "node"):
+        elif str(location) not in _VALID_UGRID_LOCATIONS:
             msg = (
                 f'has location="{location}", which is not one of '
                 '"face", "edge" or "node".'
@@ -1068,6 +1078,7 @@ class Checker:
                 f"{n_lis_dims} instead of 1."
             )
             log_lis("R405", msg)
+            lis_dim = None
         else:
             (lis_dim,) = lis_dims
 
@@ -1096,12 +1107,12 @@ class Checker:
 
         if "_FillValue" in lis_var.attributes:
             msg = (
-                "has a _FillValue attribute, which should not be present "
+                "has a '_FillValue' attribute, which should not be present "
                 "on a location-index-set."
             )
             log_lis("A403", msg)
 
-        if mesh_var:
+        if mesh_var and lis_dim and parent_dim:
             len_lis = self.file_scan.dimensions[lis_dim].length
             len_parent = self.file_scan.dimensions[parent_dim].length
             if len_lis >= len_parent:
@@ -1131,7 +1142,7 @@ class Checker:
 
         if index_value is not None and index_value.dtype != lis_var.dtype:
             msg = (
-                f'has a start_index of type "{index_value.dtype}", '
+                f"has a 'start_index' of type \"{index_value.dtype}\", "
                 "which is different from the variable type, "
                 f'"{lis_var.dtype}".'
             )
@@ -1178,7 +1189,8 @@ class Checker:
         # (so they are detected + checked even without the correct cf_role)
         self._mesh_referrers = {}
         self._lis_referrers = {}
-        for referrer_name, referrer_var in self._meshdata_vars.items():
+        for referrer_name, referrer_var in list(self._meshdata_vars.items()):
+            # Note: taking a copy as we may modify _meshdata_vars in the loop
             meshprop = referrer_var.attributes.get("mesh")
             meshvar_name = property_as_single_name(meshprop)
             if (
@@ -1186,7 +1198,7 @@ class Checker:
                 and meshvar_name in self._all_vars
                 and meshvar_name not in self._mesh_vars
             ):
-                # Add this reference to out list of all meshvars
+                # Add this reference to our list of all meshvars
                 self._mesh_vars[meshvar_name] = self._all_vars[meshvar_name]
                 # Record name of referring var.
                 # N.B. potentially this can overwrite a previous referrer,
@@ -1201,8 +1213,12 @@ class Checker:
                 and lisvar_name in self._all_vars
                 and lisvar_name not in self._lis_vars
             ):
-                # Add this reference to out list of all meshvars
+                # Add this reference to our list of all meshvars
                 self._lis_vars[lisvar_name] = self._all_vars[lisvar_name]
+                # Also remove it from the meshdata-vars if it was there
+                # N.B. this could only happen if it has a wrong cf_role, but
+                # that is just the kind of error we dealing with here.
+                self._meshdata_vars.pop(lisvar_name, None)
                 # Record name of referring var.
                 self._lis_referrers[lisvar_name] = referrer_name
 
