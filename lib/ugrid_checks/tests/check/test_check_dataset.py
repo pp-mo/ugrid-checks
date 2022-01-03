@@ -1580,3 +1580,60 @@ class TestChecker_LocationIndexSets(DatasetChecker):
             r'which is different from the variable type, "int64"\.'
         )
         self.check(scan, "A407", msg)
+
+
+class TestChecker_Global(DatasetChecker):
+    # A901 : not testable (except via cf-checker)
+
+    def test_a902_conventions_missing(self, scan_0d_mesh):
+        del scan_0d_mesh.attributes["Conventions"]
+        msg = r"A902 : dataset has no 'Conventions' attribute\."
+        self.check(scan_0d_mesh, "A902", msg)
+
+    def test_a903_conventions_nougrid(self, scan_0d_mesh):
+        scan_0d_mesh.attributes["Conventions"] = "something; CF-1.2"
+        msg = (
+            'A903 : dataset has Conventions="something; CF-1.2", which '
+            r'does not.* of the form "UGRID-<major>.<minor>"\.'
+        )
+        self.check(scan_0d_mesh, "A903", msg)
+
+    # A904 : not really testable, since assigning *any* valid cf_role prevents
+    # a variable being identified a plain non-UGRID var (or even a datavar)
+    # (though that could perhaps change in future).
+    # For example...
+    def test_a904_rogue_ugrid_cfrole(self, scan_0d_mesh):
+        oddvar_name = "rogue"
+        scan_0d_mesh.variables[oddvar_name] = NcVariableSummary(
+            name=oddvar_name,
+            dimensions=("num_node",),
+            shape=(8,),
+            dtype=np.dtype(np.int32),
+            attributes={
+                "cf_role": "face_face_connectivity",
+            },
+        )
+        self.check(
+            scan_0d_mesh,
+            statements=[
+                ("A301", r'connectivity variable "rogue".* no parent mesh\.'),
+                ("R304", '"rogue" has dimensions.* 1, instead of 2.'),
+            ],
+        )
+
+    def test_a905_invalid_cf_role(self, scan_0d_mesh):
+        oddvar_name = "rogue"
+        scan_0d_mesh.variables[oddvar_name] = NcVariableSummary(
+            name=oddvar_name,
+            dimensions=("num_node",),
+            shape=(8,),
+            dtype=np.dtype(np.int32),
+            attributes={
+                "cf_role": "something_odd",
+            },
+        )
+        msg = (
+            'WARN A905 : netcdf variable "rogue" has cf_role="something_odd", '
+            "which is not a recognised value defined by either CF or UGRID."
+        )
+        self.check(scan_0d_mesh, "A905", msg)

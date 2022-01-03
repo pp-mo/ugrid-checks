@@ -1413,7 +1413,7 @@ class Checker:
                 elif cf_role not in _VALID_CF_CF_ROLES:
                     msg = (
                         f'has cf_role="{cf_role}", which is not a recognised '
-                        "value defined in either CF or UGRID."
+                        "value defined by either CF or UGRID."
                     )
                     LOG.state("A905", "netcdf", var_name, msg)
 
