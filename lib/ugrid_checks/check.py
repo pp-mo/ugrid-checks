@@ -25,13 +25,19 @@ _VALID_CONNECTIVITY_ROLES = [
     "boundary_node_connectivity",
 ]
 
-_VALID_CF_ROLES = [
+_VALID_UGRID_CF_ROLES = [
     "mesh_topology",
     "location_index_set",
 ] + _VALID_CONNECTIVITY_ROLES
 
 _VALID_MESHCOORD_ATTRS = [
     f"{location}_coordinates" for location in ("face", "edge", "node")
+]
+
+_VALID_CF_CF_ROLES = [
+    "timeseries_id",
+    "profile_id",
+    "trajectory_id",
 ]
 
 # Valid cf varname regex : copied from iris.common.metadata code.
@@ -43,13 +49,15 @@ class Checker:
         self.file_scan = file_scan
         self.do_data_checks = do_data_checks
         self._all_vars = file_scan.variables
-        # Note: the following are filled in the initial meshvar scanning
-        self._meshdata_vars: List[NcVariableSummary] = []
-        self._mesh_vars: List[NcVariableSummary] = []
-        self._lis_vars: List[NcVariableSummary] = []
+        # Note: the following are filled in by 'dataset_identify_containers'
+        self._meshdata_vars: Dict[str, NcVariableSummary] = {}
+        self._mesh_vars: Dict[str, NcVariableSummary] = {}
+        self._lis_vars: Dict[str, NcVariableSummary] = {}
         self._mesh_referrers: Dict[str, str] = {}
         self._lis_referrers: Dict[str, str] = {}
+        # Note: these are filled by 'dataset_check_containers_and_map_dims'
         self._all_mesh_dims: Dict[str, Dict[str, Union[None, str]]] = {}
+        self._allowed_cfrole_varnames: List[str]
 
     def check_mesh_attr_is_varlist(
         self, meshvar: NcVariableSummary, attrname: str
@@ -325,6 +333,9 @@ class Checker:
             conn_var = self._all_vars.get(conn_name)
             ok = conn_var is not None
         if ok:
+            # Add to our list variables 'allowed' to have a UGRID cf-role.
+            self._allowed_cfrole_varnames.append(conn_name)
+
             msg_prefix = f'of mesh "{meshvar.name}" '
 
             def log_conn(errcode, msg):
@@ -519,7 +530,10 @@ class Checker:
             LOG.state(errcode, "", meshvar.name, msg)
             # Also, if the 'cf_role' was something else, then check it is a
             # valid option + emit an additional message if needed.
-            if cfrole_prop is not None and cfrole_prop not in _VALID_CF_ROLES:
+            if (
+                cfrole_prop is not None
+                and cfrole_prop not in _VALID_UGRID_CF_ROLES
+            ):
                 msg = (
                     f'has a "cf_role" of "{cfrole_prop}", '
                     "which is not a valid UGRID cf_role."
@@ -1087,17 +1101,20 @@ class Checker:
             )
             log_lis("A407", msg)
 
-    def check_dataset(self):
+    def dataset_identify_containers(self):
         """
-        Run all conformance checks on the contained file scan.
+        Find "mesh" , "mesh data", and "location index set" variables,
 
-        All results logged via :data:`LOG.state`.
+        Also include possibles due to mesh/lis references from data variables.
+
+        Results set as self properties :
+            self._meshdata_vars
+            self._mesh_vars
+            self._lis_vars
+            self._mesh_referrers
+            self._lis_referrers
 
         """
-        #
-        # Phase#1 : identify mesh variables, mesh data variables,
-        # and location index sets
-        #
         # Location index sets are those with a cf_role of 'location_index_set'
         self._lis_vars = vars_w_props(
             self._all_vars, cf_role="location_index_set"
@@ -1116,7 +1133,6 @@ class Checker:
                 )
             )
         }
-
         # Mesh vars are those with cf_role="mesh_topology".
         self._mesh_vars = vars_w_props(self._all_vars, cf_role="mesh_topology")
 
@@ -1154,18 +1170,34 @@ class Checker:
                 # Record name of referring var.
                 self._lis_referrers[lisvar_name] = referrer_name
 
-        #
-        # Phase#2 : check all mesh variables
-        #
+    def dataset_check_containers_and_map_dims(self):
+        """
+        Check all putative mesh + lis variables and collect dimension maps.
+        Writes self._all_mesh_dims: {<mesh or lis name>: {location: dim-name}}
 
-        # Check all putative mesh vars and collect dimension maps.
+        Note: in checking the individual mesh variables, we also check all
+        the coordinates and connectivities.
+
+        This routine also sets self._allowed_cfrole_varnames
+
+        """
 
         # Build a map of the dimensions of all the meshes,
         # all_meshes_dims: {meshname: {location: dimname}}
         self._all_mesh_dims = {}
 
+        # This list of "UGRID variables" is used by 'dataset_global_checks' to
+        # find any vars with a UGRID-style 'cf_role' that should not have one.
+        # We don't include meshdata, or coordinate variables, which should
+        # *not* have a cf_role anyway.
+        # The connectivities are added by 'check_mesh_connectivity'.
+        self._allowed_cfrole_varnames = list(self._mesh_vars.keys()) + list(
+            self._lis_vars.keys()
+        )
+
         # Check all mesh vars
-        # Note: this call also fills in 'self._all_mesh_dims'.
+        # Note: this call also fills in 'self._all_mesh_dims', and checks all
+        # the attached coordinates and connectivites for each mesh.
         for meshvar in self._mesh_vars.values():
             self.check_mesh_var(meshvar)
 
@@ -1174,14 +1206,11 @@ class Checker:
         for lis_var in self._lis_vars.values():
             self.check_lis_var(lis_var)
 
-        # Check all mesh-data vars
-        for meshdata_var in self._meshdata_vars.values():
-            self.check_meshdata_var(meshdata_var)
+    def dataset_detect_shared_dims(self):
+        """
+        Check for any dimensions shared between meshes - an advisory warning.
 
-        #
-        # Now check for dimensions shared between meshes - an advisory warning.
-        #
-
+        """
         # Convert all_meshes_dims: {meshname: {location: dimname}}
         # .. to dim_meshes: {dimname: [meshnames]}
         dim_meshes = {}
@@ -1216,9 +1245,15 @@ class Checker:
                     msg += f' and "{last_mesh}".'
                 LOG.state("A104", None, None, msg)
 
-        # Check for coords and conns referenced by multiple meshes.
-        # A201 coord should have 1-and-only-1 parent mesh
-        # A301 connectivity should have 1-and-only-1 parent mesh
+    def dataset_detect_multiple_refs(self):
+        """
+        Check for any coords and conns referenced by multiple meshes.
+
+        N.B. relevant errors are :
+            * A201 coord should have 1-and-only-1 parent mesh
+            * A301 connectivity should have 1-and-only-1 parent mesh
+
+        """
         var_refs_meshes_attrs = {}
         all_ref_attrs = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
         for some_meshname in sorted(self._mesh_vars):
@@ -1259,6 +1294,84 @@ class Checker:
                     vartype = "Mesh connectivity"
                     code = "A301"
                 LOG.state(code, vartype, some_varname, msg)
+
+    def dataset_global_checks(self):
+        """Do file-level checks not based on any particular variable type."""
+
+        def log_dataset(errcode, msg):
+            LOG.state(errcode, "", "", msg)
+
+        # A901 "dataset contents should also be CF compliant" -- not checkable,
+        # unless we integrate this code with cf-checker.
+
+        # Check the global Conventions attribute for a UGRID version.
+        conventions = self.file_scan.attributes.get("Conventions")
+        if conventions is None:
+            msg = ""
+            log_dataset("A902", "dataset has no 'Conventions' attribute.")
+        else:
+            conventions = str(conventions)
+            re_conventions = re.compile(r"UGRID-[0-9]+\.[0-9]+")
+            if not re_conventions.search(conventions):
+                # NOTE: just search.  Don't attempt to split, as usage of
+                # comma/space/semicolon might be inconsistent, and we don't
+                # need to care about that here.
+                msg = (
+                    f'dataset has Conventions="{conventions}", which does not '
+                    "contain a UGRID convention statement of the form "
+                    '"UGRID-<major>.<minor>".'
+                )
+                log_dataset("A903", msg)
+
+        # Check for any unexpected 'cf_role' usages.
+        # N.B. the logic here is that
+        #   1) if it has a UGRID-type cf-role, then *either* it was already
+        #       identified (and checked), *or* it generates a A904 warning
+        #   2) if it has a CF cf-role, we don't comment
+        #   3) if it has some other cf-role, this is unrecognised -> A905
+        for var_name, var in self._all_vars.items():
+            if (
+                "cf_role" in var.attributes
+                and var_name not in self._allowed_cfrole_varnames
+            ):
+                cf_role = str(var.attributes["cf_role"])
+                if cf_role in _VALID_UGRID_CF_ROLES:
+                    msg = (
+                        f'has cf_role="{cf_role}", which is a UGRID defined '
+                        "cf_role term, but the variable is not recognised as "
+                        "a UGRID mesh, location-index-set or connectivity "
+                        "variable."
+                    )
+                    LOG.state("A904", "netcdf", var_name, msg)
+                elif cf_role not in _VALID_CF_CF_ROLES:
+                    msg = (
+                        f'has cf_role="{cf_role}", which is not a recognised '
+                        "value defined in either CF or UGRID."
+                    )
+                    LOG.state("A905", "netcdf", var_name, msg)
+
+    def check_dataset(self):
+        """
+        Run all conformance checks on the contained file scan.
+
+        All results logged via :data:`LOG.state`.
+
+        """
+
+        self.dataset_identify_containers()
+        self.dataset_check_containers_and_map_dims()
+
+        # Check all the mesh-data vars
+        for meshdata_var in self._meshdata_vars.values():
+            self.check_meshdata_var(meshdata_var)
+
+        # Do the checks which cut across different meshes
+        self.dataset_detect_shared_dims()
+        self.dataset_detect_multiple_refs()
+
+        # Do the miscellaneous dataset-level checks
+        # TODO: enable, when we fix the 'orphan connectivity' problem.
+        # self.dataset_global_checks()
 
 
 def check_dataset_inner(file_scan: NcFileSummary):
