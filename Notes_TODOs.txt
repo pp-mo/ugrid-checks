@@ -1,8 +1,26 @@
-Odd tasks
-  rationalise use of '' and "" in all the error messages
+write tests for latest checks (lis and global)
+review all the test-output statement messages
+    regularise use of '' and "" in all the error messages
+    regularise use of 'attribute="value"' form
+    regularise use of must/should equivalents in A- and R-type messages
+recheck testing coverage + add tests for any obvious missed areas
+add C.I. tests to repo
+add package-installation to repo (including command-line invocation)
+    - use setup.cfg
+    - provide PyPI and conda builds ?
+add HTML output form, with auto-links to conformance pages
+
+? data-value tests
+
+Odd additional / tidying tasks
+    review use of type annotations
+    consider deeper testing of 'orphan' connectivities, as various errors may go wrong in this case ??
+
 
 
 =========
+PROPOSALS FOR CHANGING STATEMENT NUMBERS ...
+    - pending agreement of the conformance page changes.
 
 Some inconsistencies now identified between this and <ugrid-conventions>/src/conformance.md
 

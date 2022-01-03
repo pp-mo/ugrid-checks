@@ -457,7 +457,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         next_var(scan, "node_lat_2")
         # point a connectivity at those
         meshvar.attributes["face_node_connectivity"] = "node_lat_2 node_lat_3"
-
+        # delete the now-unreferenced one, to avoid additional errors
+        del scan.variables["face_nodes"]
         msg = (
             "face_node_connectivity=\"\\['node_lat_2', 'node_lat_3'\\]\""
             ", which contains 2 names, instead of 1."
@@ -470,6 +471,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         # This is always caused by a subsidiary specific error, so for testing
         # it doesn't much matter which we choose.
         meshvar.attributes["face_node_connectivity"] = ""
+        # delete the now-unreferenced one, to avoid additional errors
+        del scan.variables["face_nodes"]
         self.check(
             scan,
             statements=[
@@ -522,9 +525,10 @@ class TestChecker_MeshVariables(DatasetChecker):
     ):
         scan, meshvar = scan_1d_and_meshvar
         del meshvar.attributes["edge_node_connectivity"]
-        # Remove this, just to avoid an additional error
+        # delete some other things, to avoid additional errors
+        del scan.variables["edge_nodes"]
         del meshvar.attributes["edge_dimension"]
-        # Avoid checking the data-variable, which now has a dim problem.
+        # Also avoid checking the data-variable, which now has a dim problem.
         del scan.variables["sample_data"].attributes["mesh"]
         msg = 'has "topology_dimension=1", but.*' "no 'edge_node_connectivity'"
         self.check(scan, "R111", msg)
@@ -1350,6 +1354,8 @@ class TestChecker_Connectivities(DatasetChecker):
         # Reference the old 'face_nodes' variable in the new 'topology_2' mesh
         assert mesh2.attributes["face_node_connectivity"] == "face_nodes_2"
         mesh2.attributes["face_node_connectivity"] = "face_nodes"
+        # Also delete the 'orphan', to avoid further errors
+        del scan.variables["face_nodes_2"]
         msg = (
             '"face_nodes" is referenced by multiple mesh variables : '
             "topology:face_node_connectivity, "
@@ -1359,6 +1365,16 @@ class TestChecker_Connectivities(DatasetChecker):
         # - this can't easily be avoided.
         msg2 = "does not contain any element dimension of the parent mesh"
         self.check(scan, statements=[("A301", msg), ("R305", msg2)])
+
+    def test_a301_conn_nomesh(self, scan_2d_and_connvar):
+        # Test the 'orphan connectivity' detection.
+        scan, conn = scan_2d_and_connvar
+        # Add edges to the scan.
+        self._add_edges(scan)
+        # But 'orphan' the edges connectivity by removing it from the mesh.
+        meshvar = scan.variables["topology"]
+        del meshvar.attributes["edge_node_connectivity"]
+        self.check(scan, "A301", '"edge_nodes" has no parent mesh.')
 
     def test_a302_conn_nonintegraltype(self, scan_2d_and_connvar):
         scan, conn = scan_2d_and_connvar
