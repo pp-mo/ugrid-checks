@@ -22,7 +22,10 @@ jobs:
       - name: create tests env
         run: |
           $CONDA/bin/conda create -n testenv python=3.8
-          source $CONDA/bin/activate testenv
+
+      - name: activate
+          . $CONDA/bin/activate testenv
+          echo "Python=$(which python)"
 
       - name: debug nc install
         run: |
