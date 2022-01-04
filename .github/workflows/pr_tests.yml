@@ -22,4 +22,5 @@ jobs:
         run: pwd
 
       - name: run tests
+        run:
           pytest lib/ugrid_checks/tests
