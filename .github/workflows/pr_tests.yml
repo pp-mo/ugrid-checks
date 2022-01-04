@@ -37,7 +37,7 @@ jobs:
           source $CONDA/bin/activate testenv
           which python
           python -c "import netCDF4 as nc; print(nc)"
-          ls /home/runner/.local/bin/nc*
+          which ncgen
 
       - name: debug pwd
         run: pwd
