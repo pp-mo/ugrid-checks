@@ -20,24 +20,21 @@ jobs:
           python-version: 3.8
 
       - name: create tests env
-        run: |
-          $CONDA/bin/conda create -n testenv python=3.8
-
-      - name: activate
-          . $CONDA/bin/activate testenv
-          echo "Python=$(which python)"
+        run: $CONDA/bin/conda create -n testenv python=3.8
 
       - name: debug nc install
         run: |
+          source $CONDA/bin/activate testenv
           echo $(which conda) | cat
           which python
           $CONDA/bin/conda env list
 
       - name: install deps
-        run: $CONDA/bin/conda install pytest netCDF4
+        run: $CONDA/bin/conda install -n testenv pytest netCDF4
 
       - name: debug nc install
         run: |
+          source $CONDA/bin/activate testenv
           which python
           python -c "import netCDF4 as nc; print(nc)"
           ls /home/runner/.local/bin/nc*
