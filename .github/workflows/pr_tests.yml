@@ -12,21 +12,15 @@ jobs:
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+     - uses: actions/checkout@v2
 
-      - name: install conda
-        run: |
-          wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh
-          ls Miniconda*
-          echo "yes" | bash Miniconda3-py38_4.10.3-Linux-x86_64.sh
+     - name: Set up Python 3.8
+       uses: actions/setup-python@v2
+       with:
+         python-version: 3.8
 
       - name: create tests env
-        run: |
-          conda create -n testenv python=3.8
-          conda activate testenv
-
-      - name: install other deps
-        run: conda install pytest numpy netCDF4
+        run: $CONDA/bin/conda install pytest netCDF4
 
       - name: debug nc install
         run: |
