@@ -14,24 +14,20 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: install conda
-        run: pip install conda
+      - name: install netCDF4
+        run: pip install netCDF4
 
-      - name: create test env
+      - name: debug nc install
         run: |
-          conda create -y -n testenv python=3.8
+          which python
+          python -c "import netCDF4 as nc; print(nc)"
+          which ncdump
 
       - name: debug pwd1
         run: pwd
 
-      - name: debug conda loc
-        run: echo $(which conda)
-
-      - name: activate (will fail?)
-        run: conda activate testenv
-
-      - name: install deps
-        run: conda install pytest numpy netCDF4
+      - name: install other deps
+        run: pip install pytest numpy
 
       - name: debug pwd
         run: pwd
