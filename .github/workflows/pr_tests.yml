@@ -20,6 +20,17 @@ jobs:
           python-version: 3.8
 
       - name: create tests env
+        run: |
+          $CONDA/bin/conda create -n testenv python=3.8
+          $CONDA/bin/conda activate testenv
+
+      - name: debug nc install
+        run: |
+          echo $(which conda) | cat
+          which python
+          $CONDA/bin/conda env list
+
+      - name: install deps
         run: $CONDA/bin/conda install pytest netCDF4
 
       - name: debug nc install
