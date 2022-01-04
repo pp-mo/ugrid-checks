@@ -22,8 +22,8 @@ jobs:
 
       - name: create tests env
         run: |
-        conda create -n testenv python=3.8
-        conda activate testenv
+          conda create -n testenv python=3.8
+          conda activate testenv
 
       - name: install other deps
         run: conda install pytest numpy netCDF4
