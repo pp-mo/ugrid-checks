@@ -1,4 +1,3 @@
-write tests for latest checks (lis and global)
 review all the test-output statement messages
     regularise use of '' and "" in all the error messages
     regularise use of 'attribute="value"' form
@@ -15,7 +14,7 @@ add HTML output form, with auto-links to conformance pages
 Odd additional / tidying tasks
     review use of type annotations
     consider deeper testing of 'orphan' connectivities, as various errors may go wrong in this case ??
-
+    R116/R118 could test output form for *multiple* connectivies with non-standard-dim-order
 
 
 =========

@@ -92,12 +92,11 @@ class Checker:
         else:
             success = value.dtype.kind == "U"
             if not success:
-                LOG.state(
-                    "R105",
-                    "Mesh",
-                    meshvar.name,
-                    f"attribute '{attrname}' does not have string type.",
+                msg = (
+                    f"attribute '{attrname}' has type \"{value.dtype}\", "
+                    "which is not a string type."
                 )
+                LOG.state("R105", "Mesh", meshvar.name, msg)
             if success:
                 varnames = property_namelist(value)
                 if not varnames:
@@ -107,7 +106,7 @@ class Checker:
                         "R105",
                         "Mesh",
                         meshvar.name,
-                        f"attribute '{attrname}' = \"{value}\", "
+                        f'has {attrname}="{value}", '
                         "which is not a valid list of netcdf variable names.",
                     )
                     success = False
@@ -120,7 +119,7 @@ class Checker:
                             "R105",
                             "Mesh",
                             meshvar.name,
-                            f"attribute '{attrname}' = \"{varname}\", "
+                            f'has {attrname}="{varname}", '
                             "which is not a valid netcdf variable name.",
                         )
                         success = False
@@ -185,14 +184,14 @@ class Checker:
         result_codes_and_messages = []
 
         def log_bounds_statement(code, msg):
-            msg = f'has bounds="{bounds_name}", which {msg}.'
+            msg = f'has bounds="{bounds_name}", which {msg}'
             result_codes_and_messages.append((code, msg))
 
         has_bounds = bounds_name is not None
         if has_bounds:
             msg = self.var_ref_problem(bounds_name)
             if msg != "":
-                log_bounds_statement("R203", msg)
+                log_bounds_statement("R203", f"{msg}.")  # NB full stop !
                 has_bounds = False
 
         if has_bounds:
@@ -229,7 +228,7 @@ class Checker:
                         coord_attr = "<none>"
                     msg = (
                         f'has {attr_name}="{bounds_attr}", which does not '
-                        f'match the parent {attr_name} of "{coord_attr}".'
+                        f"match the parent '{attr_name}' of \"{coord_attr}\"."
                     )
                     log_bounds_statement("R203", msg)
 
@@ -309,18 +308,18 @@ class Checker:
             if dtype.kind != "f":
                 log_coord(
                     "A202",
-                    f'has type "{dtype}", which is not floating-point.',
+                    f'has type "{dtype}", which is not a floating-point type.',
                 )
 
             # A203 standard-name : has+valid (can't handle fully ??)
             stdname = coord.attributes.get("standard_name")
             if not stdname:
-                log_coord("A203", 'has no "standard_name" attribute.')
+                log_coord("A203", "has no 'standard_name' attribute.")
 
             # A204 units : has+valid (can't handle fully ??)
             stdname = coord.attributes.get("units")
             if not stdname:
-                log_coord("A204", 'has no "units" attribute.')
+                log_coord("A204", "has no 'units' attribute.")
 
             # A205 bounds data values match derived ones
             # - did this already above, within "check_coord_bounds"
@@ -359,7 +358,7 @@ class Checker:
         elif cf_role not in _VALID_CONNECTIVITY_ROLES:
             msg = (
                 f'has cf_role="{cf_role}", '
-                "which is not a valid UGRID connectivity attribute name."
+                "which is not a valid UGRID connectivity attribute."
             )
             log_conn("R302", msg)
         elif role_name and cf_role != role_name:
@@ -484,7 +483,7 @@ class Checker:
             and fill_value is not None
         ):
             msg = (
-                f"has a _FillValue attribute, which should not be present "
+                f"has a '_FillValue' attribute, which should not be present "
                 f'on a "{role_name}" connectivity.'
             )
             log_conn("A304", msg)
@@ -562,12 +561,12 @@ class Checker:
                 "But it has "
             )
             if cfrole_prop is None:
-                msg += 'no "cf_role" property,'
+                msg += "no 'cf_role' property,"
                 errcode = "R101"
             else:
-                msg += f'a "cf_role" of "{cfrole_prop}",'
+                msg += f'cf_role="{cfrole_prop}",'
                 errcode = "R102"
-            msg += " which should be 'mesh_topology'."
+            msg += ' which should be "mesh_topology".'
             # N.B. do not identify as a Mesh, statement just says "variable"
             LOG.state(errcode, "", meshvar.name, msg)
             # Also, if the 'cf_role' was something else, then check it is a
@@ -577,7 +576,7 @@ class Checker:
                 and cfrole_prop not in _VALID_UGRID_CF_ROLES
             ):
                 msg = (
-                    f'has a "cf_role" of "{cfrole_prop}", '
+                    f'has cf_role="{cfrole_prop}", '
                     "which is not a valid UGRID cf_role."
                 )
                 # "R102.a"
@@ -586,7 +585,7 @@ class Checker:
         # Check all other attributes of mesh vars.
         topology_dimension = meshvar.attributes.get("topology_dimension")
         if topology_dimension is None:
-            log_meshvar("R103", 'has no "topology_dimension".')
+            log_meshvar("R103", "has no 'topology_dimension' attribute.")
         else:
             # Check the topology dimension.
             # In principle, this controls which other connectivity properties
@@ -640,20 +639,20 @@ class Checker:
                 if topology_dimension < appropriate_dim:
                     # something is extra
                     msg = (
-                        f'has "topology_dimension={topology_dimension}", '
+                        f'has topology_dimension="{topology_dimension}", '
                         f"but the presence of a '{highest_connectivity}' "
                         f"attribute implies it should be {appropriate_dim}."
                     )
                 else:
                     # something is missing
-                    toplogy_required_attribute = {
+                    topology_required_attribute = {
                         0: "face_node",
                         1: "edge_node_connectivity",
                         2: "face_node_connectivity",
                     }[int(topology_dimension)]
                     msg = (
-                        f'has "topology_dimension={topology_dimension}", '
-                        f"but it has no '{toplogy_required_attribute}' "
+                        f'has topology_dimension="{topology_dimension}", '
+                        f"but it has no '{topology_required_attribute}' "
                         f"attribute."
                     )
                 log_meshvar(errcode, msg)
@@ -673,14 +672,14 @@ class Checker:
                 if not ok:
                     errcode = "R108" if is_conn else "R107"
                     msg = (
-                        f'attribute "{attr}" = "{attr_value}", which is not '
+                        f'has {attr}="{attr_value}", which is not '
                         "a list of variables in the dataset."
                     )
                     log_meshvar(errcode, msg)
                 elif is_conn and len(var_names) != 1:
                     # "R106.a"
                     msg = (
-                        f'has {attr}="{var_names!r}", which contains '
+                        f'has {attr}="{attr_value}", which contains '
                         f"{len(var_names)} names, instead of 1."
                     )
                     log_meshvar("?", msg)
@@ -723,7 +722,7 @@ class Checker:
                     dimension_name = None
                     # "A105 ?"
                     msg = (
-                        f'has an attribute "{dimattr_name}", which is not '
+                        f"has an attribute '{dimattr_name}', which is not "
                         "a valid UGRID term, and may be "
                         'a mistake (ADVISORY)."'
                     )
@@ -735,9 +734,9 @@ class Checker:
                 if connattr_name not in meshvar.attributes:
                     # "A106 ?"
                     msg = (
-                        f'has an attribute "{dimattr_name}", '
+                        f"has an attribute '{dimattr_name}', "
                         "which is not valid "
-                        f'since there is no "{connattr_name}".',
+                        f"since there is no '{connattr_name}'."
                     )
                     log_meshvar("?", msg)
                 elif dimension_name in self.file_scan.dimensions:
@@ -746,7 +745,7 @@ class Checker:
                     errcode = {"edge": "R115", "face": "R117"}[location]
                     msg = (
                         f'has {dimattr_name}="{dimension_name}", which is not '
-                        "a dimension in the dataset.",
+                        "a dimension in the dataset."
                     )
                     log_meshvar(errcode, msg)
             elif connattr_name in meshvar.attributes:
@@ -801,7 +800,7 @@ class Checker:
             conn_names = [f'"{name}"' for name in conns]
             conn_names_str = ", ".join(conn_names)
             msg = (
-                f'has no "{dim_attr}" attribute, but there are '
+                f"has no '{dim_attr}' attribute, but there are "
                 f"{location} connectivities "
                 f"with non-standard dimension order : {conn_names_str}."
             )
@@ -831,13 +830,13 @@ class Checker:
                     f"{name}_node_connectivity" for name in elems
                 ]
                 missing_elements = [
-                    f'"{name}"'
+                    f"'{name}'"
                     for name in required_elements
                     if name not in meshvar.attributes
                 ]
                 if missing_elements:
                     err_msg = (
-                        f'has a "{attrname}" attribute, which is not valid '
+                        f"has a '{attrname}' attribute, which is not valid "
                         f"since there is no "
                     )
                     err_msg += "or ".join(missing_elements)
@@ -853,9 +852,9 @@ class Checker:
         if meshvar.dimensions:
             log_meshvar("A101", "has dimensions.")
         if "standard_name" in meshvar.attributes:
-            log_meshvar("A102", 'has a "standard_name" attribute.')
+            log_meshvar("A102", "has a 'standard_name' attribute.")
         if "units" in meshvar.attributes:
-            log_meshvar("A103", 'has a "units" attribute.')
+            log_meshvar("A103", "has a 'units' attribute.")
         # NOTE: "A104" relates to multiple meshvars, so is handled in caller.
 
         return mesh_dims
@@ -1413,7 +1412,7 @@ class Checker:
                 elif cf_role not in _VALID_CF_CF_ROLES:
                     msg = (
                         f'has cf_role="{cf_role}", which is not a recognised '
-                        "value defined by either CF or UGRID."
+                        "cf-role value defined by either CF or UGRID."
                     )
                     LOG.state("A905", "netcdf", var_name, msg)
 
@@ -1492,6 +1491,7 @@ def check_dataset(
     print_results: bool = False,
     log_summary: bool = False,
     filter_level: int = logging.INFO,
+    print_func=print,
 ) -> List[LogRecord]:
     """
     Run UGRID conformance checks on a file.
@@ -1515,7 +1515,7 @@ def check_dataset(
             A list of log records, one for each problem identified.
     """
     LOG.reset()
-    LOG.enable_reports_printout(print_results)
+    LOG.enable_reports_printout(print_results, print_func=print_func)
     LOG.set_filter_level(filter_level)
 
     if isinstance(file, str):

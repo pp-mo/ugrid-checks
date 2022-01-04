@@ -357,7 +357,7 @@ class TestChecker_MeshVariables(DatasetChecker):
     def test_r101_mesh_missing_cf_role(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         del meshvar.attributes["cf_role"]
-        msg = "no \"cf_role\" property, which should be 'mesh_topology'"
+        msg = r"no 'cf_role' property, which should be \"mesh_topology\"\."
         self.check(scan, "R101", msg)
 
     def test_r102_mesh_bad_cf_role(self, scan_2d_and_meshvar):
@@ -366,7 +366,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         self.check(
             scan,
             statements=[
-                ("R102", "should be 'mesh_topology'"),
+                ("R102", 'should be "mesh_topology"'),
                 (
                     "",  # N.B. this one doesn't have a code yet
                     "not a valid UGRID cf_role",
@@ -377,7 +377,7 @@ class TestChecker_MeshVariables(DatasetChecker):
     def test_r103_mesh_no_topology_dimension(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         del meshvar.attributes["topology_dimension"]
-        self.check(scan, "R103", 'no "topology_dimension"')
+        self.check(scan, "R103", r"no 'topology_dimension' attribute\.")
 
     def test_r104_mesh_unknown_topology_dimension(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
@@ -392,7 +392,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         meshvar.attributes["node_coordinates"] = 3
         msg = (
             "\"topology\" attribute 'node_coordinates'.*"
-            "does not have string type"
+            "which is not a string type"
         )
         self.check(
             scan,
@@ -406,7 +406,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = ""
         msg = (
-            '"topology" attribute \'node_coordinates\' = "".*'
+            '"topology" has node_coordinates="".*'
             "is not a valid list of netcdf variable"
         )
         self.check(
@@ -423,7 +423,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = "$123"
         msg = (
-            r'"topology" attribute \'node_coordinates\'.*"\$123"'
+            r'"topology" has node_coordinates="\$123"'
             ".*not a valid netcdf variable name"
         )
         self.check(
@@ -460,7 +460,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         # delete the now-unreferenced one, to avoid additional errors
         del scan.variables["face_nodes"]
         msg = (
-            "face_node_connectivity=\"\\['node_lat_2', 'node_lat_3'\\]\""
+            'face_node_connectivity="node_lat_2 node_lat_3"'
             ", which contains 2 names, instead of 1."
         )
         self.check(scan, "", msg)
@@ -479,14 +479,14 @@ class TestChecker_MeshVariables(DatasetChecker):
                 (
                     "R105",
                     (
-                        "\"topology\" attribute 'face_node_connectivity' "
-                        '= "".*is not a valid list of netcdf variable'
+                        '"topology" has face_node_connectivity="".*'
+                        "not a valid list of netcdf variable"
                     ),
                 ),
                 (
                     "R108",
                     (
-                        '"topology" attribute "face_node_connectivity" = ""'
+                        '"topology" has face_node_connectivity=""'
                         ".*not a list of variables in the dataset"
                     ),
                 ),
@@ -515,7 +515,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["edge_node_connectivity"] = edgenodes_name
         msg = (
-            'has "topology_dimension=0", but the presence of.*'
+            'has topology_dimension="0", but the presence of.*'
             "'edge_node_connectivity'.*implies it should be 1."
         )
         self.check(scan, "R110", msg)
@@ -530,7 +530,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         del meshvar.attributes["edge_dimension"]
         # Also avoid checking the data-variable, which now has a dim problem.
         del scan.variables["sample_data"].attributes["mesh"]
-        msg = 'has "topology_dimension=1", but.*' "no 'edge_node_connectivity'"
+        msg = 'has topology_dimension="1", but.*' "no 'edge_node_connectivity'"
         self.check(scan, "R111", msg)
 
     # NOTE: R112 is to be removed
@@ -540,7 +540,7 @@ class TestChecker_MeshVariables(DatasetChecker):
     ):
         scan, meshvar = scan_1d_and_meshvar
         meshvar.attributes["topology_dimension"] = 2
-        msg = 'has "topology_dimension=2", but.*' "no 'face_node_connectivity'"
+        msg = "has topology_dimension=\"2\", but.* no 'face_node_connectivity'"
         self.check(scan, "R113", msg)
 
     def test_r113_mesh_topologydim0_extra_faceconn(self, scan_0d_and_meshvar):
@@ -559,7 +559,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["face_node_connectivity"] = facenodes_name
         msg = (
-            'has "topology_dimension=0", but the presence of.*'
+            'has topology_dimension="0", but the presence of.*'
             "'face_node_connectivity'.*implies it should be 2."
         )
         self.check(scan, "R113", msg)
@@ -582,8 +582,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["boundary_node_connectivity"] = boundnodes_name
         msg = (
-            'has a "boundary_node_connectivity".*'
-            'there is no "face_node_connectivity"'
+            "has a 'boundary_node_connectivity'.*"
+            "there is no 'face_node_connectivity'"
         )
         self.check(scan, "R114", msg)
 
@@ -653,7 +653,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         edgeface_conn.dimensions = edgeface_conn.dimensions[::-1]
         # That should trigger the error
         msg = (
-            r'has no "edge_dimension" attribute.*'
+            r"has no 'edge_dimension' attribute.*"
             "edge connectivities with non-standard dimension order : "
             f'"{edgeface_name}"'
         )
@@ -689,7 +689,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         faceface_conn.dimensions = faceface_conn.dimensions[::-1]
         # That should trigger the error
         msg = (
-            r'has no "face_dimension" attribute.*'
+            r"has no 'face_dimension' attribute.*"
             "face connectivities with non-standard dimension order : "
             f'"{faceface_name}"'
         )
@@ -715,8 +715,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["face_face_connectivity"] = faceface_name
         msg = (
-            'has a "face_face_connectivity".*'
-            'there is no "face_node_connectivity"'
+            "has a 'face_face_connectivity'.*"
+            "there is no 'face_node_connectivity'"
         )
         self._check_w_r305(scan, "R119", msg)
 
@@ -736,8 +736,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["face_edge_connectivity"] = faceedges_name
         msg = (
-            'has a "face_edge_connectivity".*'
-            'there is no "face_node_connectivity"'
+            "has a 'face_edge_connectivity'.*"
+            "there is no 'face_node_connectivity'"
         )
         self._check_w_r305(scan, "R120", msg)
 
@@ -757,8 +757,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["face_edge_connectivity"] = faceedges_name
         msg = (
-            'has a "face_edge_connectivity".*'
-            'there is no "edge_node_connectivity"'
+            "has a 'face_edge_connectivity'.*"
+            "there is no 'edge_node_connectivity'"
         )
         self._check_w_r305(scan, "R120", msg)
 
@@ -778,8 +778,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["edge_face_connectivity"] = edgefaces_name
         msg = (
-            'has a "edge_face_connectivity".*'
-            'there is no "face_node_connectivity"'
+            "has a 'edge_face_connectivity'.*"
+            "there is no 'face_node_connectivity'"
         )
         self._check_w_r305(scan, "R121", msg)
 
@@ -799,8 +799,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         )
         meshvar.attributes["edge_face_connectivity"] = edgefaces_name
         msg = (
-            'has a "edge_face_connectivity".*'
-            'there is no "edge_node_connectivity"'
+            "has a 'edge_face_connectivity'.*"
+            "there is no 'edge_node_connectivity'"
         )
         self._check_w_r305(scan, "R121", msg)
 
@@ -816,7 +816,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         self.check(
             scan,
             "A102",
-            'Mesh variable "topology" has a "standard_name" attribute',
+            "Mesh variable \"topology\" has a 'standard_name' attribute",
         )
 
     def test_a103_mesh_variable_units(self, scan_0d_and_meshvar):
@@ -825,7 +825,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         self.check(
             scan,
             "A103",
-            'Mesh variable "topology" has a "units" attribute',
+            "Mesh variable \"topology\" has a 'units' attribute",
         )
 
     # Note: A104 is tested in TestChecker_Dataset
@@ -834,7 +834,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["boundary_dimension"] = "odd_name"
         msg = (
-            'has an attribute "boundary_dimension", which is '
+            "has an attribute 'boundary_dimension', which is "
             "not a valid UGRID term"
         )
         self.check(scan, "", msg)  # TODO: will be "A105"
@@ -843,7 +843,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_dimension"] = "odd_name"
         msg = (
-            'has an attribute "node_dimension", which is '
+            "has an attribute 'node_dimension', which is "
             "not a valid UGRID term"
         )
         self.check(scan, "", msg)  # TODO: will be "A105"
@@ -852,8 +852,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         scan, meshvar = scan_0d_and_meshvar
         meshvar.attributes["edge_dimension"] = "odd_name"
         msg = (
-            'has an attribute "edge_dimension", which is not valid.*'
-            'no "edge_node_connectivity"'
+            "has an attribute 'edge_dimension', which is not valid.*"
+            r"no 'edge_node_connectivity'\."
         )
         #  TODO: will be "A106" -- or possibly "Rxxx" ?
         self.check(scan, "", msg)
@@ -862,8 +862,8 @@ class TestChecker_MeshVariables(DatasetChecker):
         scan, meshvar = scan_0d_and_meshvar
         meshvar.attributes["face_dimension"] = "odd_name"
         msg = (
-            'has an attribute "face_dimension", which is not valid.*'
-            'no "face_node_connectivity"'
+            "has an attribute 'face_dimension', which is not valid.*"
+            r"no 'face_node_connectivity'\."
         )
         #  TODO: will be "A106" -- or possibly "Rxxx" ?
         self.check(scan, "", msg)
@@ -1138,7 +1138,7 @@ class TestChecker_Coords(DatasetChecker):
         coord.attributes["bounds"] = facelons_bds_name
         msg = (
             'standard_name="junk", which does not match the parent '
-            r'standard_name of "longitude"\.'
+            r'\'standard_name\' of "longitude"\.'
         )
         self.check(scan_2d_mesh, "R203", msg)
 
@@ -1158,10 +1158,13 @@ class TestChecker_Coords(DatasetChecker):
         del coord.attributes["standard_name"]
         msg = (
             'standard_name="longitude", which does not match the parent '
-            r'standard_name of "<none>"\.'
+            r'\'standard_name\' of "<none>"\.'
         )
         # N.B. this causes an additional A203 statement, which can't be avoided
-        msg2 = 'coordinate.* "longitude".* has no "standard_name"'
+        msg2 = (
+            'coordinate variable "longitude".*'
+            r"has no \'standard_name\' attribute\."
+        )
         self.check(scan_2d_mesh, statements=[("R203", msg), ("A203", msg2)])
 
     def test_r203_coord_bounds_units_clash(self, scan_2d_mesh):
@@ -1178,7 +1181,7 @@ class TestChecker_Coords(DatasetChecker):
         coord.attributes["bounds"] = facelons_bds_name
         msg = (
             'units="junk", which does not match the parent '
-            r'units of "degrees_east"\.'
+            r'\'units\' of "degrees_east"\.'
         )
         self.check(scan_2d_mesh, "R203", msg)
 
@@ -1198,10 +1201,10 @@ class TestChecker_Coords(DatasetChecker):
         del coord.attributes["units"]
         msg = (
             'units="degrees_east", which does not match the parent '
-            r'units of "<none>"\.'
+            r'\'units\' of "<none>"\.'
         )
         # N.B. this causes an additional A204 statement, which can't be avoided
-        msg2 = 'coordinate.* "longitude".* has no "units" attribute'
+        msg2 = r'coordinate.* "longitude".* has no \'units\' attribute\.'
         self.check(scan_2d_mesh, statements=[("R203", msg), ("A204", msg2)])
 
     #
@@ -1232,20 +1235,20 @@ class TestChecker_Coords(DatasetChecker):
         coord.dtype = np.dtype(np.int32)
         msg = (
             'variable "node_lon" within topology:node_coordinates has '
-            r'type "int32", which is not floating-point\.'
+            r'type "int32", which is not a floating-point type\.'
         )
         self.check(scan, "A202", msg)
 
     def test_a203_coord_no_stdname(self, scan_2d_and_coordvar):
         scan, coord = scan_2d_and_coordvar
         del coord.attributes["standard_name"]
-        msg = 'has no "standard_name" attribute'
+        msg = r"has no 'standard_name' attribute\."
         self.check(scan, "A203", msg)
 
     def test_a204_coord_no_units(self, scan_2d_and_coordvar):
         scan, coord = scan_2d_and_coordvar
         del coord.attributes["units"]
-        msg = 'has no "units" attribute'
+        msg = r"has no 'units' attribute\."
         self.check(scan, "A204", msg)
 
     # A205 : bounds data matching expected -- not yet implemented
@@ -1401,7 +1404,7 @@ class TestChecker_Connectivities(DatasetChecker):
         scan, conn = scan_2d_and_connvar
         conn.attributes["_FillValue"] = np.array(-1, dtype=conn.dtype)
         msg = (
-            '"face_nodes".* has a _FillValue attribute, which '
+            "\"face_nodes\".* has a '_FillValue' attribute, which "
             "should not be present on a "
             r'"face_node_connectivity" connectivity\.'
         )
@@ -1634,6 +1637,7 @@ class TestChecker_Global(DatasetChecker):
         )
         msg = (
             'WARN A905 : netcdf variable "rogue" has cf_role="something_odd", '
-            "which is not a recognised value defined by either CF or UGRID."
+            "which is not a recognised cf-role value "
+            "defined by either CF or UGRID."
         )
         self.check(scan_0d_mesh, "A905", msg)
