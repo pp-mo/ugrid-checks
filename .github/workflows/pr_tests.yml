@@ -14,6 +14,12 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: Run pytest
+      - name: Install pytest
         run: |
+          pip install pytest
+
+      - name: Debug pwd
+        run: pwd
+
+      - name: run tests
           pytest lib/ugrid_checks/tests
