@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-from typing import Mapping, Text, Tuple, Union
+from typing import Mapping, Text, Tuple
 
-import dask.array as da
 import numpy as np
 
 
@@ -51,7 +50,7 @@ class NcVariableSummary:
     shape: Tuple[int, ...]  #
 
     #: Numpy dtype, consistent with 'data', if any
-    dtype: np.dtype
+    dtype: object
 
     #: Attributes : values are numpy scalars or 0-1 dimensional arrays
     attributes: Mapping[Text, np.ndarray]
@@ -59,7 +58,7 @@ class NcVariableSummary:
     #: Data : a Dask lazy array, or None if actual file not available.
     #: If data is not None, it is still possible for access to fail if the
     #: original file has since been modified or removed.
-    data: Union[da.Array, None]
+    data = None
 
     def __init__(
         self, name, dimensions, shape, dtype, attributes=None, data=None
