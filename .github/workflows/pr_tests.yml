@@ -21,7 +21,7 @@ jobs:
         run: |
           which python
           python -c "import netCDF4 as nc; print(nc)"
-          which ncdump
+          ls /home/runner/.local/bin/nc*
 
       - name: debug pwd1
         run: pwd
