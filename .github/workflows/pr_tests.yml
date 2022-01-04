@@ -14,9 +14,9 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: Install pytest
+      - name: Install deps
         run: |
-          pip install pytest
+          pip install pytest numpy netCDF4
 
       - name: Debug pwd
         run: pwd
