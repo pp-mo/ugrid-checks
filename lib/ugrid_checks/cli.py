@@ -31,15 +31,15 @@ def make_parser():
 def call_cli(args=None):
     parser = make_parser()
     args = parser.parse_args(args)
-    from ugrid_checks.check import check_dataset, output_report
+    from ugrid_checks.check import check_dataset, produce_report
     from ugrid_checks.ugrid_logger import LOG
 
     level = logging.ERROR if args.errorsonly else logging.INFO
     check_dataset(
         file=args.file,
-        print_results=False,
-        log_summary=False,
         filter_level=level,
+        print_results=False,
+        print_summary=False,  # print summary separately, if needed
     )
     rc = 0
     if LOG.N_FAILURES > 0:
@@ -49,6 +49,6 @@ def call_cli(args=None):
             rc = 1
 
     if rc != 0 or not args.quiet:
-        output_report()
+        produce_report()
 
     return rc
