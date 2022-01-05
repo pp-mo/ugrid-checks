@@ -1062,7 +1062,7 @@ class Checker:
             if parent_dim is None:
                 msg = (
                     f'has location="{location}", which is a location '
-                    "that does not exist in the indicated mesh, "
+                    "that does not exist in the parent mesh, "
                     f'"{mesh_name}".'
                 )
                 log_lis("R404", msg)
@@ -1117,7 +1117,7 @@ class Checker:
             if len_lis >= len_parent:
                 msg = (
                     f'has dimension "{lis_dim}", length {len_lis}, which is '
-                    f"longer than the {location} dimension of the indicated "
+                    f"longer than the {location} dimension of the parent "
                     f'mesh "{mesh_name}" : '
                     f'"{parent_dim}", length {len_parent}.'
                 )
@@ -1132,7 +1132,7 @@ class Checker:
             if mesh_var:
                 msg = (
                     "contains index values which are outside the range of the "
-                    f'indicated mesh "{mesh_name}" {location} dimension, '
+                    f'parent mesh "{mesh_name}" {location} dimension, '
                     f' : "{parent_dim}", range 1..{len_parent}.'
                 )
                 log_lis(

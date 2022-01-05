@@ -1508,7 +1508,7 @@ class TestChecker_LocationIndexSets(DatasetChecker):
         lis_var.attributes["location"] = "edge"
         msg = (
             '"lis" has location="edge", which.*'
-            r'does not exist in the indicated mesh, "topology"\.'
+            r'does not exist in the parent mesh, "topology"\.'
         )
         self.check(scan, "R404", msg)
 
@@ -1566,7 +1566,7 @@ class TestChecker_LocationIndexSets(DatasetChecker):
         scan.dimensions["lis_nodes"] = NcDimSummary(17)
         msg = (
             '"lis" has dimension "lis_nodes", length 17.*'
-            "longer than the node dimension of the indicated "
+            "longer than the node dimension of the parent "
             r'mesh "topology" : "num_node", length 8\.'
         )
         self.check(scan, "A404", msg)
