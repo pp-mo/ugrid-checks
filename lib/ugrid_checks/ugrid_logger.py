@@ -26,13 +26,15 @@ class CheckLoggingInterface:
 
     """
 
-    def __init__(self, logger=None, handler=None, print_func=print):
+    def __init__(self, logger=None, handler=None, print_func=None):
         if logger is None:
             logger = logging.Logger("ugrid_conformance")
         self._logger = logger
         if handler is None:
             handler = UgridLogHandler(level=logging.INFO)
         self._handler = handler
+        if print_func is None:
+            print_func = print
         self.print_func = print_func
         #: Total number of warning =ADVISE statements logged (since reset).
         self.N_WARNINGS = 0

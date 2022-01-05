@@ -14,7 +14,7 @@ from .scan_utils import (
 )
 from .ugrid_logger import LOG
 
-__all__ = ["check_dataset"]
+__all__ = ["check_dataset", "produce_report"]
 
 _VALID_UGRID_LOCATIONS = [
     "node",
@@ -1463,8 +1463,15 @@ def check_dataset_inner(file_scan: NcFileSummary):
     checker.check_dataset()
 
 
-def output_report(print_func=print):
-    # Emit the output results.
+def produce_report(print_results: bool = True) -> List[str]:
+    # Produce a summary of the logged results.
+    report_lines = []
+
+    def print_func(msg: str):
+        report_lines.append(msg)
+        if print_results:
+            print(msg)
+
     logs = LOG.report_statement_logrecords()
     print_func("")
     print_func("UGRID conformance checks complete.")
@@ -1485,29 +1492,32 @@ def output_report(print_func=print):
     print_func("")
     print_func("Done.")
 
+    return report_lines
+
 
 def check_dataset(
     file: Union[NcFileSummary, AnyStr, Path],
     print_results: bool = False,
-    log_summary: bool = False,
+    print_summary: bool = True,
     filter_level: int = logging.INFO,
-    print_func=print,
 ) -> List[LogRecord]:
     """
     Run UGRID conformance checks on a file.
 
-    Log statements regarding any problems found to the :data:`_LOG` logger.
+    Log statements regarding any problems found to the :data:`LOG` logger.
     Return the accumulated log records of problems found.
-    Optionally print logger messages and/or log a summary of results.
+    Optionally print logger messages and/or a result summary.
 
     Parameters
     ----------
-    file : filepath string, Path or :class:`NcFileSummary`
+    file : string, Path or :class:`NcFileSummary`
         path to, or representation of a netcdf input file
-    print_results : bool, default=True
-        whether to print warnings as they are logged
-    log_summary : bool, default=False
-        whether to add a results summary to the log record
+    print_results : bool, default=False
+        print all statment messages as they are logged
+    print_summary : bool, default=True
+        print a results summary at the end
+    filter_level : int
+        control level for message logging (not printing).
 
     Returns
     -------
@@ -1515,7 +1525,7 @@ def check_dataset(
             A list of log records, one for each problem identified.
     """
     LOG.reset()
-    LOG.enable_reports_printout(print_results, print_func=print_func)
+    LOG.enable_reports_printout(print_results)
     LOG.set_filter_level(filter_level)
 
     if isinstance(file, str):
@@ -1529,9 +1539,8 @@ def check_dataset(
 
     check_dataset_inner(file_scan)
 
-    if log_summary:
+    if print_summary:
         # Add a summary into the log record.
-        LOG.set_filter_level(logging.DEBUG)  # log the 'printonly' calls
-        output_report(print_func=LOG.printonly)
+        produce_report(print_results=True)
 
     return LOG.report_statement_logrecords()
