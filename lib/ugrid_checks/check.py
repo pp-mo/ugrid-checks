@@ -1,5 +1,4 @@
 import logging
-from logging import LogRecord
 from pathlib import Path
 import re
 from typing import AnyStr, Dict, List, Tuple, Union
@@ -12,9 +11,9 @@ from .scan_utils import (
     property_namelist,
     vars_w_props,
 )
-from .ugrid_logger import LOG
+from .ugrid_logger import CheckLoggingInterface
 
-__all__ = ["check_dataset", "produce_report"]
+__all__ = ["Checker", "check_dataset"]
 
 _VALID_UGRID_LOCATIONS = [
     "node",
@@ -51,8 +50,16 @@ _VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z][a-zA-Z0-9]*[\w.+\-@]*$""")
 
 
 class Checker:
-    def __init__(self, file_scan: NcFileSummary, do_data_checks: bool = False):
+    def __init__(
+        self,
+        file_scan: NcFileSummary,
+        logger: CheckLoggingInterface = None,
+        do_data_checks: bool = False,
+    ):
         self.file_scan = file_scan
+        if logger is None:
+            logger = CheckLoggingInterface()
+        self.logger = logger
         self.do_data_checks = do_data_checks
         self._all_vars = file_scan.variables
         # Note: the following are filled in by 'dataset_identify_containers'
@@ -65,6 +72,11 @@ class Checker:
         self._all_mesh_dims: Dict[str, Dict[str, Union[None, str]]] = {}
         self._allowed_cfrole_varnames: List[str]
         self._orphan_connectivities: Dict[str, NcVariableSummary] = {}
+        # Initialise
+        self.check_dataset()
+
+    def state(self, errcode: str, vartype: str, varname: str, msg: str):
+        self.logger.state(errcode, vartype, varname, msg)
 
     def check_mesh_attr_is_varlist(
         self, meshvar: NcVariableSummary, attrname: str
@@ -96,13 +108,13 @@ class Checker:
                     f"attribute '{attrname}' has type \"{value.dtype}\", "
                     "which is not a string type."
                 )
-                LOG.state("R105", "Mesh", meshvar.name, msg)
+                self.state("R105", "Mesh", meshvar.name, msg)
             if success:
                 varnames = property_namelist(value)
                 if not varnames:
                     # Empty is *not* a valid content.
                     # N.B. this includes non-string contents.
-                    LOG.state(
+                    self.state(
                         "R105",
                         "Mesh",
                         meshvar.name,
@@ -115,7 +127,7 @@ class Checker:
                     if not varname:  # skip any extra blanks
                         continue
                     if not _VALID_NAME_REGEX.match(varname):
-                        LOG.state(
+                        self.state(
                             "R105",
                             "Mesh",
                             meshvar.name,
@@ -124,7 +136,7 @@ class Checker:
                         )
                         success = False
                     elif varname not in self._all_vars:
-                        LOG.state(
+                        self.state(
                             "R106",
                             "Mesh",
                             meshvar.name,
@@ -261,7 +273,7 @@ class Checker:
         # Function to emit a statement message, adding context as to the
         # specific coord variable.
         def log_coord(code, msg):
-            LOG.state(
+            self.state(
                 code, "Mesh coordinate", coord.name, common_msg_prefix + msg
             )
 
@@ -348,7 +360,7 @@ class Checker:
             msg_prefix = ""
 
         def log_conn(errcode, msg):
-            LOG.state(
+            self.state(
                 errcode, "Mesh connectivity", conn_name, msg_prefix + msg
             )
 
@@ -545,7 +557,7 @@ class Checker:
         """
 
         def log_meshvar(code, msg):
-            LOG.state(code, "Mesh", meshvar.name, msg)
+            self.state(code, "Mesh", meshvar.name, msg)
 
         # First check for bad 'cf_role' :
         # if wrong, meshvar can only have been identified by reference.
@@ -568,7 +580,7 @@ class Checker:
                 errcode = "R102"
             msg += ' which should be "mesh_topology".'
             # N.B. do not identify as a Mesh, statement just says "variable"
-            LOG.state(errcode, "", meshvar.name, msg)
+            self.state(errcode, "", meshvar.name, msg)
             # Also, if the 'cf_role' was something else, then check it is a
             # valid option + emit an additional message if needed.
             if (
@@ -861,7 +873,7 @@ class Checker:
 
     def check_meshdata_var(self, datavar: NcVariableSummary):
         def log_meshdata(errcode, msg):
-            LOG.state(errcode, "Mesh data", datavar.name, msg)
+            self.state(errcode, "Mesh data", datavar.name, msg)
 
         lis_name = datavar.attributes.get("location_index_set")
         mesh_name = datavar.attributes.get("mesh")
@@ -1016,7 +1028,7 @@ class Checker:
             }
 
         def log_lis(errcode, msg):
-            LOG.state(errcode, "location-index-set", lis_var.name, msg)
+            self.state(errcode, "location-index-set", lis_var.name, msg)
 
         cf_role = lis_var.attributes.get("cf_role")
         if cf_role is None:
@@ -1309,7 +1321,7 @@ class Checker:
                     msg = f'Dimension "{dim}" is mapped by multiple meshes : '
                     msg += ", ".join(f'"{mesh}"' for mesh in other_meshes)
                     msg += f' and "{last_mesh}".'
-                LOG.state("A104", None, None, msg)
+                self.state("A104", None, None, msg)
 
     def dataset_detect_multiple_refs(self):
         """
@@ -1359,13 +1371,13 @@ class Checker:
                 else:
                     vartype = "Mesh connectivity"
                     code = "A301"
-                LOG.state(code, vartype, some_varname, msg)
+                self.state(code, vartype, some_varname, msg)
 
     def dataset_global_checks(self):
         """Do file-level checks not based on any particular variable type."""
 
         def log_dataset(errcode, msg):
-            LOG.state(errcode, "", "", msg)
+            self.state(errcode, "", "", msg)
 
         # A901 "dataset contents should also be CF compliant" -- not checkable,
         # unless we integrate this code with cf-checker.
@@ -1408,19 +1420,19 @@ class Checker:
                         "a UGRID mesh, location-index-set or connectivity "
                         "variable."
                     )
-                    LOG.state("A904", "netcdf", var_name, msg)
+                    self.state("A904", "netcdf", var_name, msg)
                 elif cf_role not in _VALID_CF_CF_ROLES:
                     msg = (
                         f'has cf_role="{cf_role}", which is not a recognised '
                         "cf-role value defined by either CF or UGRID."
                     )
-                    LOG.state("A905", "netcdf", var_name, msg)
+                    self.state("A905", "netcdf", var_name, msg)
 
     def check_dataset(self):
         """
         Run all conformance checks on the contained file scan.
 
-        All results logged via :data:`LOG.state`.
+        All results logged via :data:`self.state`.
 
         """
 
@@ -1431,7 +1443,7 @@ class Checker:
         for var_name, var in self._orphan_connectivities.items():
             self.check_connectivity(var)
             # Always flag these as a possible problem.
-            LOG.state("A301", "connectivity", var_name, "has no parent mesh.")
+            self.state("A301", "connectivity", var_name, "has no parent mesh.")
 
         # Check all the mesh-data vars
         for meshdata_var in self._meshdata_vars.values():
@@ -1444,89 +1456,73 @@ class Checker:
         # Do the miscellaneous dataset-level checks
         self.dataset_global_checks()
 
+    def checking_report(self) -> str:
+        # Produce a summary of the logged results.
+        report_lines = []
 
-def check_dataset_inner(file_scan: NcFileSummary):
-    """
-    Run UGRID conformance checks on a representation of a file.
+        def line(msg: str):
+            report_lines.append(msg)
 
-    This low-level routine operates on an abstract "file-scan" representation
-    rather than a real file.
-    All checking messages are recorded with :meth:`LOG.state`.
+        log = self.logger
+        logs = log.report_statement_logrecords()
+        line("")
+        line("UGRID conformance checks complete.")
+        line("")
+        if log.N_FAILURES + log.N_WARNINGS == 0:
+            line("No problems found.")
+        else:
+            if logs:
+                line("List of checker messages :")
+                for log_record in logs:
+                    line("  " + log_record.msg)
+                line("")
+            line(
+                f"Total of {log.N_WARNINGS + log.N_FAILURES} "
+                "problems logged :"
+            )
+            line(f"  {log.N_FAILURES} Rxxx requirement failures")
+            line(f"  {log.N_WARNINGS} Axxx advisory recommendation warnings")
+        line("")
+        line("Done.")
 
-    Parameters
-    ----------
-    file_scan : :class:`NcFileSummary`
-        representation of a netcdf file to check
-
-    """
-    checker = Checker(file_scan)
-    checker.check_dataset()
-
-
-def produce_report(print_results: bool = True) -> List[str]:
-    # Produce a summary of the logged results.
-    report_lines = []
-
-    def print_func(msg: str):
-        report_lines.append(msg)
-        if print_results:
-            print(msg)
-
-    logs = LOG.report_statement_logrecords()
-    print_func("")
-    print_func("UGRID conformance checks complete.")
-    print_func("")
-    if LOG.N_FAILURES + LOG.N_WARNINGS == 0:
-        print_func("No problems found.")
-    else:
-        if logs:
-            print_func("List of checker messages :")
-            for log in logs:
-                print_func("  " + log.msg)
-            print_func("")
-        print_func(
-            f"Total of {LOG.N_WARNINGS + LOG.N_FAILURES} problems logged : \n"
-            f"  {LOG.N_FAILURES} Rxxx requirement failures\n"
-            f"  {LOG.N_WARNINGS} Axxx advisory recommendation warnings"
-        )
-    print_func("")
-    print_func("Done.")
-
-    return report_lines
+        return "\n".join(report_lines)
 
 
 def check_dataset(
     file: Union[NcFileSummary, AnyStr, Path],
-    print_results: bool = False,
     print_summary: bool = True,
-    filter_level: int = logging.INFO,
-) -> List[LogRecord]:
+    omit_advisories: bool = False,
+) -> Checker:
     """
     Run UGRID conformance checks on a file.
 
-    Log statements regarding any problems found to the :data:`LOG` logger.
     Return the accumulated log records of problems found.
-    Optionally print logger messages and/or a result summary.
+    Optionally print a result summary.
+    Optionally ignore errors below a logging level.
 
     Parameters
     ----------
     file : string, Path or :class:`NcFileSummary`
         path to, or representation of a netcdf input file
-    print_results : bool, default=False
-        print all statment messages as they are logged
     print_summary : bool, default=True
         print a results summary at the end
-    filter_level : int
-        control level for message logging (not printing).
+    omit_advisories : bool, default False
+        If set, log only 'requirements' Rxxx statements, and ignore the
+        advisory 'Axxx' ones.
 
     Returns
     -------
-    checker_warnings : list of :class:LogRecord
-            A list of log records, one for each problem identified.
+    checker : Checker
+        A checker for the file.
+
     """
-    LOG.reset()
-    LOG.enable_reports_printout(print_results)
-    LOG.set_filter_level(filter_level)
+    if omit_advisories:
+        # Provide a customised logger
+        logger = CheckLoggingInterface()
+        log_filter_level = logging.ERROR if omit_advisories else logging.INFO
+        logger.set_filter_level(log_filter_level)
+    else:
+        logger = None  # checker creation will supply
 
     if isinstance(file, str):
         file_path = Path(file)
@@ -1537,10 +1533,10 @@ def check_dataset(
     else:
         file_scan = scan_dataset(file_path)
 
-    check_dataset_inner(file_scan)
+    checker = Checker(file_scan, logger)
 
     if print_summary:
-        # Add a summary into the log record.
-        produce_report(print_results=True)
+        # Print the results : this is the default action
+        print(checker.checking_report())
 
-    return LOG.report_statement_logrecords()
+    return checker
