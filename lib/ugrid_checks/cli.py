@@ -16,31 +16,28 @@ def make_parser():
         "-q",
         "--quiet",
         action="store_true",
-        help="print nothing unless there are problems.",
+        help="don't print a checking report if there were no problems",
     )
     parser.add_argument(
         "-e",
         "--errorsonly",
         action="store_true",
         help=(
-            'Only report errors ("Rxxx"= require codes), '
-            'i.e. suppress warnings ("Axxx"= advise codes).'
+            'only report errors ("Rxxx"= require codes), '
+            'i.e. suppress warnings ("Axxx"= advise codes)'
         ),
     )
     parser.add_argument(
         "-s",
         "--summary",
         action="store_true",
-        help="Print a summary of mesh structure found in the file.",
+        help="print a summary of UGRID mesh information found in the file",
     )
     parser.add_argument(
         "-v",
         "--version",
         action="store_true",
-        help=(
-            "Print versions of ugrid-checker, "
-            "and latest known-compatible CF version."
-        ),
+        help="print version information",
     )
     return parser
 
