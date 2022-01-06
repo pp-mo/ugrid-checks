@@ -50,6 +50,20 @@ _VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z][a-zA-Z0-9]*[\w.+\-@]*$""")
 
 
 class Checker:
+    """
+    Object to perform UGRID checking on a file.
+
+    Scans a file on creation, and records the checking messages on its
+    'self.logger', which is a :class:`CheckLoggingInterface`.
+
+    Can produce text reports for a checking summary, and a file structure
+    summary.
+
+    Could also be used programmatically to aid file analysis, but the way the
+    information is stored is not currently designed with external use in mind.
+
+    """
+
     def __init__(
         self,
         file_scan: NcFileSummary,
@@ -76,6 +90,12 @@ class Checker:
         self.check_dataset()
 
     def state(self, errcode: str, vartype: str, varname: str, msg: str):
+        """
+        Log a checking statement.
+
+        Interface as for :meth:`CheckLoggingInterface.state`.
+
+        """
         self.logger.state(errcode, vartype, varname, msg)
 
     def check_mesh_attr_is_varlist(
@@ -147,7 +167,7 @@ class Checker:
                         success = False
         return success
 
-    def var_ref_problem(self, attr_value: np.ndarray):
+    def var_ref_problem(self, attr_value: np.ndarray) -> str:
         """
         Make a text description of any problems of a single-variable reference.
 
@@ -185,6 +205,9 @@ class Checker:
 
         Ok for _no_ bounds-attribute, but not if it is an empty string.
         Check: existence, n-dims, parent dimension, standard-name and units.
+
+        Note: this method does not log messages directly, but returns results
+        for the caller to log them with added context.
 
         Returns
         codes_and_messages : List[tuple(str, str)]
@@ -266,9 +289,8 @@ class Checker:
         # Note: the content of the coords attribute was already checked
 
         # Elements which change as we scan the various coords.
-        coord = None  # Changes as we scan them.
+        coord = None
         common_msg_prefix = ""
-        coord_context_str = ""
 
         # Function to emit a statement message, adding context as to the
         # specific coord variable.
@@ -297,7 +319,7 @@ class Checker:
                 location = attr_name.split("_")[0]
                 mesh_dim = self._all_mesh_dims[meshvar.name][location]
                 if coord_dim != mesh_dim:
-                    msg = coord_context_str + (
+                    msg = (
                         f'has dimension "{coord_dim}", but the parent mesh '
                         f'{location} dimension is "{mesh_dim}".'
                     )
@@ -547,7 +569,7 @@ class Checker:
 
     def check_mesh_var(self, meshvar: NcVariableSummary) -> Dict[str, str]:
         """
-        Run checks on a mesh variable.
+        Validity-check a mesh variable.
 
         Parameters
         ----------
@@ -594,7 +616,6 @@ class Checker:
                 # "R102.a"
                 log_meshvar("?", msg)
 
-        # Check all other attributes of mesh vars.
         topology_dimension = meshvar.attributes.get("topology_dimension")
         if topology_dimension is None:
             log_meshvar("R103", "has no 'topology_dimension' attribute.")
@@ -668,10 +689,6 @@ class Checker:
                         f"attribute."
                     )
                 log_meshvar(errcode, msg)
-
-        # We will use the 'calculated' one to scope any remaining checks.
-        # TODO: remove this, if it continues to be unused.
-        # topology_dimension = appropriate_dim
 
         # Check all coordinate and connectivity attributes are valid "varlists"
         varlist_names = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
@@ -872,6 +889,8 @@ class Checker:
         return mesh_dims
 
     def check_meshdata_var(self, datavar: NcVariableSummary):
+        """Validity-check a mesh data variable."""
+
         def log_meshdata(errcode, msg):
             self.state(errcode, "Mesh data", datavar.name, msg)
 
@@ -1432,10 +1451,9 @@ class Checker:
         """
         Run all conformance checks on the contained file scan.
 
-        All results logged via :data:`self.state`.
+        All results logged via `self.state`.
 
         """
-
         self.dataset_identify_containers()
         self.dataset_check_containers_and_map_dims()
 
@@ -1457,7 +1475,7 @@ class Checker:
         self.dataset_global_checks()
 
     def checking_report(self) -> str:
-        # Produce a summary of the logged results.
+        """Produce a text summary of the checking results."""
         report_lines = []
 
         def line(msg: str):
@@ -1488,12 +1506,7 @@ class Checker:
         return "\n".join(report_lines)
 
     def structure_report(self) -> str:
-        """
-        Produce a text summary of the dataset UGRID structure.
-
-        N.B. only functional after check_dataset is called.
-
-        """
+        """Produce a text summary of the dataset UGRID structure."""
         result_lines = []
         indent = "    "
 
@@ -1606,9 +1619,9 @@ def check_dataset(
     """
     Run UGRID conformance checks on a file.
 
-    Return the accumulated log records of problems found.
     Optionally print a result summary.
     Optionally ignore errors below a logging level.
+    Returns a checker object with a file analysis and checking log records.
 
     Parameters
     ----------
