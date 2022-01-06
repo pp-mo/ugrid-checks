@@ -1487,6 +1487,116 @@ class Checker:
 
         return "\n".join(report_lines)
 
+    def structure_report(self) -> str:
+        """
+        Produce a text summary of the dataset UGRID structure.
+
+        N.B. only functional after check_dataset is called.
+
+        """
+        result_lines = []
+        indent = "    "
+
+        def line(msg, n_indent=0):
+            result_lines.append(indent * n_indent + msg)
+
+        def varlist_str(var: NcVariableSummary, attr_name: str) -> str:
+            names_attr = var.attributes.get(attr_name)
+            if not names_attr:
+                result = "<none>"
+            else:
+                names = str(names_attr).split(" ")
+                result = ", ".join(f'"{name}"' for name in names)
+            return result
+
+        if not self._mesh_vars:
+            line("Meshes : <none>")
+        else:
+            line("Meshes")
+            for mesh_name, mesh_var in self._mesh_vars.items():
+                line(f'"{mesh_name}"', 1)
+                dims = self._all_mesh_dims[mesh_name]
+                # Nodes is a bit 'special'
+                dim = dims["node"]
+                if not dim:
+                    line("<? no node coordinates or dimension ?>", 2)
+                else:
+                    line(f'node("{dim}")', 2)
+                    coords = varlist_str(mesh_var, "node_coordinates")
+                    line(f"coordinates : {coords}", 3)
+                # Other dims all reported in the same way
+                for location in ("edge", "face", "boundary"):
+                    dim = dims[location]
+                    if dim:
+                        line(f'{location}("{dim}")', 2)
+                        attr_name = f"{location}_node_connectivity"
+                        conn_str = varlist_str(mesh_var, attr_name)
+                        line(f"{attr_name} : {conn_str}", 3)
+                        coord_name = f"{location}_coordinates"
+                        if coord_name in mesh_var.attributes:
+                            coords = varlist_str(mesh_var, coord_name)
+                            line(f"coordinates : {coords}", 3)
+
+        if self._lis_vars:
+            line("")
+            line("Location Index Sets")
+            for lis_name, lis_var in self._lis_vars.items():
+                dim = self._all_mesh_dims[lis_name]
+                dim = varlist_str(dim)
+                line(f"{lis_name}({dim})", 2)
+                mesh = varlist_str(lis_var, "mesh")
+                line(f"mesh : {mesh}", 3)
+                loc = varlist_str(lis_var, "location")
+                line(f"location : {loc}", 3)
+
+        if self._orphan_connectivities:
+            line("")
+            line("?? Connectivities with no mesh ??")
+            for conn_name, conn_var in self._orphan_connectivities.items():
+                dims = ", ".join(f'"{dim}"' for dim in conn_var.dimensions)
+                line(f'"{conn_name}"  ( {dims} )', 1)
+                cf_role = varlist_str(conn_var, "cf_role")
+                line(f"cf_role = {cf_role}", 2)
+
+        if self._meshdata_vars:
+            line("")
+            line("Mesh Data Variables")
+            for var_name, var in self._meshdata_vars.items():
+                line(f'"{var_name}"', 1)
+                attrs = {
+                    attr_name: var.attributes.get(attr_name)
+                    for attr_name in ("mesh", "location", "location_index_set")
+                }
+                # 'treat as' mirrors logic in 'check_meshdata_var'
+                treat_as_lis = attrs["location_index_set"] and (
+                    not attrs["mesh"] or not attrs["location"]
+                )
+                if treat_as_lis:
+                    order_and_expected = [
+                        ("location_index_set", True),
+                        ("mesh", False),
+                        ("location", False),
+                    ]
+                else:
+                    order_and_expected = [
+                        ("mesh", True),
+                        ("location", True),
+                        ("location_index_set", False),
+                    ]
+                for attr_name, expected in order_and_expected:
+                    attr = attrs[attr_name]
+                    value = None
+                    if attr:
+                        value = varlist_str(var, attr_name)
+                        if not expected:
+                            value = f"? {value}"
+                    elif expected:
+                        value = "? <none>"
+                    if value:
+                        line(f"{attr_name} : {value}", 2)
+
+        return "\n".join(result_lines)
+
 
 def check_dataset(
     file: Union[NcFileSummary, AnyStr, Path],
