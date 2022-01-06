@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
-import logging
+
+from ugrid_checks.check import check_dataset
 
 
 def make_parser():
@@ -31,24 +32,21 @@ def make_parser():
 def call_cli(args=None):
     parser = make_parser()
     args = parser.parse_args(args)
-    from ugrid_checks.check import check_dataset, produce_report
-    from ugrid_checks.ugrid_logger import LOG
 
-    level = logging.ERROR if args.errorsonly else logging.INFO
-    check_dataset(
+    checker = check_dataset(
         file=args.file,
-        filter_level=level,
-        print_results=False,
         print_summary=False,  # print summary separately, if needed
+        omit_advisories=args.errorsonly,
     )
     rc = 0
-    if LOG.N_FAILURES > 0:
+    log = checker.logger
+    if log.N_FAILURES > 0:
         rc = 1
     if not args.errorsonly:
-        if LOG.N_WARNINGS > 0:
+        if log.N_WARNINGS > 0:
             rc = 1
 
     if rc != 0 or not args.quiet:
-        produce_report()
+        print(checker.checking_report())
 
     return rc

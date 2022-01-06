@@ -26,16 +26,16 @@ class CheckLoggingInterface:
 
     """
 
-    def __init__(self, logger=None, handler=None, print_func=None):
+    def __init__(self, logger=None, handler=None):
         if logger is None:
             logger = logging.Logger("ugrid_conformance")
         self._logger = logger
         if handler is None:
             handler = UgridLogHandler(level=logging.INFO)
         self._handler = handler
-        if print_func is None:
-            print_func = print
-        self.print_func = print_func
+        #: Control printing of messages as they are logged (debug).
+        self._ENABLE_PRINT = False
+        self._print_func = print
         #: Total number of warning =ADVISE statements logged (since reset).
         self.N_WARNINGS = 0
         #: Total number of error =REQUIRE statements logged (since reset).
@@ -47,12 +47,12 @@ class CheckLoggingInterface:
         self._handler.reset()
         self.N_WARNINGS = 0
         self.N_FAILURES = 0
-        self._ENABLE_PRINT = True
+        self._ENABLE_PRINT = False
 
-    def enable_reports_printout(self, print_statements=True, print_func=None):
+    def enable_reports_printout(self, print_statements=False, print_func=None):
         """Enable/disable printing of logged messages."""
         if print_func:
-            self.print_func = print_func
+            self._print_func = print_func
         self._ENABLE_PRINT = print_statements
 
     def set_filter_level(self, level: int):
@@ -71,7 +71,7 @@ class CheckLoggingInterface:
 
         """
         if self._ENABLE_PRINT:
-            self.print_func(msg)
+            self._print_func(msg)
         self._logger.log(level, msg, *args)
 
     @staticmethod
@@ -152,6 +152,3 @@ class CheckLoggingInterface:
 
         """
         self.report(msg, logging.DEBUG, *args)
-
-
-LOG = CheckLoggingInterface()
