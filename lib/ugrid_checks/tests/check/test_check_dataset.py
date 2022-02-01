@@ -369,10 +369,7 @@ class TestChecker_MeshVariables(DatasetChecker):
             scan,
             statements=[
                 ("R102", 'should be "mesh_topology"'),
-                (
-                    "",  # N.B. this one doesn't have a code yet
-                    "not a valid UGRID cf_role",
-                ),
+                ("A905", "not a valid UGRID cf_role"),
             ],
         )
 
