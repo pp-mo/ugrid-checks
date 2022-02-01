@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 import re
-from typing import AnyStr, Dict, List, Tuple, Union
+from typing import AnyStr, Dict, List, Set, Tuple, Union
 
 import numpy as np
 
@@ -1504,8 +1504,17 @@ class Checker:
 
         return "\n".join(report_lines)
 
-    def structure_report(self) -> str:
-        """Produce a text summary of the dataset UGRID structure."""
+    def structure_report(self, include_nonmesh: bool = False) -> str:
+        """
+        Produce a text summary of the dataset UGRID structure.
+
+        Parameters
+        ----------
+        include_nonmesh : bool, default False
+            If set, also output a list of file dimensions and variables *not*
+            relating to the UGRID meshes contained.
+
+        """
         result_lines = []
         indent = "    "
 
@@ -1606,6 +1615,71 @@ class Checker:
                         value = "? <none>"
                     if value:
                         line(f"{attr_name} : {value}", 2)
+
+        if include_nonmesh:
+            # A non-mesh var is one that isn't one that isn't referred to
+            # by any UGRID mesh components.
+            def var_names_set(vars: List[NcVariableSummary]) -> Set[str]:
+                return set([var.name for var in vars])
+
+            all_mesh_varnames = (
+                var_names_set(self._mesh_vars.values())
+                | var_names_set(self._lis_vars.values())
+                | var_names_set(self._meshdata_vars.values())
+                | var_names_set(self._orphan_connectivities.values())
+            )
+            nonmesh_vars = set(self._all_vars.keys()) - all_mesh_varnames
+
+            # A mesh dimension is one that is a location dim of any
+            # mesh, or any connectivity (e.g. includes dims used for
+            # nodes of a face).
+            nonmesh_dims = set(self.file_scan.dimensions.keys())
+
+            # Exclude from 'nonmesh' : all dims and vars of each mesh.
+            for meshvar in self._mesh_vars.values():
+                # Exclude all mesh location dims.
+                mesh_dims = self._all_mesh_dims[meshvar.name]
+                nonmesh_dims -= set(mesh_dims.values())
+
+                # Exclude all location coordinates, and their bounds vars.
+                for location in _VALID_UGRID_LOCATIONS:
+                    attrname = f"{location}_coordinates"
+                    attr = meshvar.attributes.get(attrname)
+                    location_coord_names = property_namelist(attr)
+                    nonmesh_vars -= set(location_coord_names)
+                    for coord_name in location_coord_names:
+                        coord_var = self._all_vars.get(coord_name)
+                        bounds_attr = coord_var.attributes.get("bounds")
+                        bounds_varname = property_as_single_name(bounds_attr)
+                        if bounds_varname:
+                            nonmesh_vars.discard(bounds_varname)
+
+                # Exclude all connectivities, and all their dims.
+                for attrname in _VALID_CONNECTIVITY_ROLES:
+                    conn_attr = meshvar.attributes.get(attrname)
+                    conn_name = property_as_single_name(conn_attr)
+                    if conn_name:
+                        nonmesh_vars.discard(conn_name)
+                        conn_var = self._all_vars.get(conn_name)
+                        if conn_var:
+                            nonmesh_dims -= set(conn_var.dimensions)
+
+            # Also exclude all dimensions of 'orphan' connectivities.
+            for conn_var in self._orphan_connectivities.values():
+                nonmesh_dims -= set(conn_var.dimensions)
+
+            # Add report section, if any nonmesh found.
+            if nonmesh_dims or nonmesh_vars:
+                line("")
+                line("Non-mesh variables and/or dimensions")
+                if nonmesh_dims:
+                    line("dimensions:", 1)
+                    for dim in sorted(nonmesh_dims):
+                        line(f'"{dim}"', 2)
+                if nonmesh_vars:
+                    line("variables:", 1)
+                    for var in sorted(nonmesh_vars):
+                        line(f'"{var}"', 2)
 
         return "\n".join(result_lines)
 
