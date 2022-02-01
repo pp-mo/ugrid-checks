@@ -613,8 +613,7 @@ class Checker:
                     f'has cf_role="{cfrole_prop}", '
                     "which is not a valid UGRID cf_role."
                 )
-                # "R102.a"
-                log_meshvar("?", msg)
+                log_meshvar("A905", msg)
 
         topology_dimension = meshvar.attributes.get("topology_dimension")
         if topology_dimension is None:

@@ -121,19 +121,16 @@ class NcFileSummary:
     attributes: Mapping[Text, np.ndarray]
 
 
-def scan_dataset(filepath):
+def scan_dataset(filepath) -> NcFileSummary:
     """
     Snapshot a netcdf dataset (the key metadata).
 
+    NOTE: though this is netCDF-4, we are not supporting Groups, at present.
+    This is adequate for CF/UGRID format files, as they don't support groups.
+
     Returns:
-        dimsdict, varsdict
-        * dimsdict (dict):
-            A map of dimension-name: length.
-        * varsdict (dict):
-            A map of each variable's properties, {var_name: propsdict}
-            Each propsdict is {attribute-name: value} over the var's ncattrs().
-            Each propsdict ALSO contains a [_VAR_DIMS] entry listing the
-            variable's dims.
+        scan : NcFileSummary
+            structured metadata objects representing all the file contents.
 
     """
     import netCDF4 as nc
