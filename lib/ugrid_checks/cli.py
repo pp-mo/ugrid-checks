@@ -34,6 +34,11 @@ def make_parser():
         help="print a summary of UGRID mesh information found in the file",
     )
     parser.add_argument(
+        "--nonmesh",
+        action="store_true",
+        help="include a list of non-mesh variables in the summary",
+    )
+    parser.add_argument(
         "-v",
         "--version",
         action="store_true",
@@ -63,7 +68,7 @@ def call_cli(args=None):
         print("")
         print("File mesh structure")
         print("-------------------")
-        print(checker.structure_report())
+        print(checker.structure_report(include_nonmesh=args.nonmesh))
         print("")
 
     rc = 0
