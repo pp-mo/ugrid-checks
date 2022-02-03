@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 import re
 from typing import AnyStr, Dict, List, Set, Tuple, Union
@@ -69,12 +68,19 @@ class Checker:
         file_scan: NcFileSummary,
         logger: CheckLoggingInterface = None,
         do_data_checks: bool = False,
+        ignore_warnings=False,
+        ignore_codes: Union[List[str], None] = None,
     ):
         self.file_scan = file_scan
         if logger is None:
             logger = CheckLoggingInterface()
         self.logger = logger
         self.do_data_checks = do_data_checks
+        if ignore_codes is None:
+            ignore_codes = []
+        self.ignore_codes = ignore_codes
+        self.ignore_warnings = ignore_warnings
+        # A shortcut for all the variables
         self._all_vars = file_scan.variables
         # Note: the following are filled in by 'dataset_identify_containers'
         self._meshdata_vars: Dict[str, NcVariableSummary] = {}
@@ -96,7 +102,9 @@ class Checker:
         Interface as for :meth:`CheckLoggingInterface.state`.
 
         """
-        self.logger.state(errcode, vartype, varname, msg)
+        if errcode not in self.ignore_codes:
+            if not self.ignore_warnings or not errcode.startswith("A"):
+                self.logger.state(errcode, vartype, varname, msg)
 
     def check_mesh_attr_is_varlist(
         self, meshvar: NcVariableSummary, attrname: str
@@ -1688,6 +1696,7 @@ def check_dataset(
     file: Union[NcFileSummary, AnyStr, Path],
     print_summary: bool = True,
     omit_advisories: bool = False,
+    ignore_codes: Union[List[str], None] = None,
 ) -> Checker:
     """
     Run UGRID conformance checks on a file.
@@ -1705,6 +1714,8 @@ def check_dataset(
     omit_advisories : bool, default False
         If set, log only 'requirements' Rxxx statements, and ignore the
         advisory 'Axxx' ones.
+    ignore_codes : list(str) or None, default None
+        A list of error codes to ignore.
 
     Returns
     -------
@@ -1712,14 +1723,6 @@ def check_dataset(
         A checker for the file.
 
     """
-    if omit_advisories:
-        # Provide a customised logger
-        logger = CheckLoggingInterface()
-        log_filter_level = logging.ERROR if omit_advisories else logging.INFO
-        logger.set_filter_level(log_filter_level)
-    else:
-        logger = None  # checker creation will supply
-
     if isinstance(file, str):
         file_path = Path(file)
     elif isinstance(file, Path):
@@ -1729,7 +1732,9 @@ def check_dataset(
     else:
         file_scan = scan_dataset(file_path)
 
-    checker = Checker(file_scan, logger)
+    checker = Checker(
+        file_scan, ignore_codes=ignore_codes, ignore_warnings=omit_advisories
+    )
 
     if print_summary:
         # Print the results : this is the default action

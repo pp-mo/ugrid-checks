@@ -1,8 +1,22 @@
-recheck testing coverage + add tests for any obvious missed areas
-add package-installation to repo (including command-line invocation)
+* still more changes : see remaining logxxx('?') forms
+    SEARCH ::log\S*\("\?::
+        ::log\w*\s*\((\s|\n)*"\?::
+    there are still 3 :
+    - check#713 : connectivity attribute contains !=1 names
+    - check#757 : special catch of 'node_dimension' / 'boundary_dimension'
+    - check#769 : dimension attr without relevant connectivity
+* more coming out of Iris code
+    - dimension length counting points of a face : >= 3
+        --> similar other possibles ??
+
+* recheck testing coverage + add tests for any obvious missed areas
+* added summary-nonmesh
+* add summary ignore/skip keys (specific codes)
+* add package-installation to repo (including command-line invocation)
     - use setup.cfg
     - provide PyPI and conda builds ?
-add HTML output form, with auto-links to conformance pages
+
+* add HTML output form, with auto-links to conformance pages
 
 ? data-value tests
 
