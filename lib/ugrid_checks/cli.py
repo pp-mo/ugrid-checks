@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import re
 
 import ugrid_checks
 from ugrid_checks.check import check_dataset
@@ -23,8 +24,8 @@ def make_parser():
         "--errorsonly",
         action="store_true",
         help=(
-            'only report errors ("Rxxx"= require codes), '
-            'i.e. suppress warnings ("Axxx"= advise codes)'
+            'ignore all warnings ("Axxx"= advise codes), '
+            'and only report errors ("Rxxx"= require codes).'
         ),
     )
     parser.add_argument(
@@ -37,6 +38,13 @@ def make_parser():
         "--nonmesh",
         action="store_true",
         help="include a list of non-mesh variables in the summary",
+    )
+    parser.add_argument(
+        "-i",
+        "--ignore",
+        type=str,
+        action="append",  # multiple occurs can add together
+        help="a list of errorcodes to ignore.",
     )
     parser.add_argument(
         "-v",
@@ -58,10 +66,23 @@ def call_cli(args=None):
         print(f"UGRID file checker, version {checker_vsn}")
         print(f"    valid to CF version : {cf_vsn}")
 
+    if not args.ignore:
+        ignore_codes = None
+    else:
+        # Find matches for the
+        ignore_codes = re.finditer(
+            "(A|R)[0-9]{3}", " ".join(args.ignore).upper()
+        )
+        ignore_codes = [
+            match.string[match.start():match.end()] for match in ignore_codes
+        ]
+        print(f"\nIgnoring codes:\n  {', '.join(ignore_codes)}")
+
     checker = check_dataset(
         file=args.file,
         print_summary=False,  # print summary separately, if needed
         omit_advisories=args.errorsonly,
+        ignore_codes=ignore_codes,
     )
 
     if args.summary:
