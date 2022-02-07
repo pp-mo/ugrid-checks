@@ -3,6 +3,11 @@
         --> similar other possibles ??
         ==> DON'T do this for now
 
+* testing for CLI
+    - basic
+    - summary
+    - ignore
+
 * add package-installation to repo (including command-line invocation)
     - use setup.cfg
     - provide PyPI and conda builds ?
