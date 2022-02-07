@@ -173,6 +173,7 @@ class Checker:
                             "in the dataset.",
                         )
                         success = False
+
         return success
 
     def var_ref_problem(self, attr_value: np.ndarray) -> str:
@@ -706,19 +707,18 @@ class Checker:
                 ok = self.check_mesh_attr_is_varlist(meshvar, attr)
                 var_names = property_namelist(attr_value)
                 if not ok:
-                    errcode = "R108" if is_conn else "R107"
+                    errcode = "R109" if is_conn else "R108"
                     msg = (
                         f'has {attr}="{attr_value}", which is not '
                         "a list of variables in the dataset."
                     )
                     log_meshvar(errcode, msg)
                 elif is_conn and len(var_names) != 1:
-                    # "R106.a"
                     msg = (
                         f'has {attr}="{attr_value}", which contains '
                         f"{len(var_names)} names, instead of 1."
                     )
-                    log_meshvar("?", msg)
+                    log_meshvar("R107", msg)
 
         # Work out the actual mesh dimensions.
         mesh_dims = {
@@ -756,25 +756,22 @@ class Checker:
                 # No 'boundary_dimension' attribute is supported.
                 if dimension_name:
                     dimension_name = None
-                    # "A105 ?"
                     msg = (
                         f"has an attribute '{dimattr_name}', which is not "
-                        "a valid UGRID term, and may be "
-                        'a mistake (ADVISORY)."'
+                        "a valid UGRID term, and may be a mistake."
                     )
-                    log_meshvar("?", msg)
-                    # TODO: add ADVISE code for this ?
+                    log_meshvar("A106", msg)
 
             if dimension_name:
                 # There is an explicit 'xxx_dimension' property.
                 if connattr_name not in meshvar.attributes:
-                    # "A106 ?"
+                    errcode = {"edge": "R123", "face": "R122"}[location]
                     msg = (
                         f"has an attribute '{dimattr_name}', "
                         "which is not valid "
                         f"since there is no '{connattr_name}'."
                     )
-                    log_meshvar("?", msg)
+                    log_meshvar(errcode, msg)
                 elif dimension_name in self.file_scan.dimensions:
                     mesh_dims[location] = dimension_name
                 else:

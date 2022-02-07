@@ -70,12 +70,21 @@ def call_cli(args=None):
         ignore_codes = None
     else:
         # Find matches for the
-        ignore_codes = re.finditer(
+        ignore_codes_iter = re.finditer(
             "(A|R)[0-9]{3}", " ".join(args.ignore).upper()
         )
-        ignore_codes = [
-            match.string[match.start():match.end()] for match in ignore_codes
-        ]
+        # NOTE: this list comprehension is currently triggering a war between
+        # black v22.1 and flake8 v4.0
+        # ignore_codes = [
+        #     match.string[match.start() : match.end()]
+        #     for match in ignore_codes
+        # ]
+        # So, here is an ugly alternative..
+        ignore_codes = []
+        for match in ignore_codes_iter:
+            i_start, i_end = match.start(), match.end()
+            match_text = match.string[i_start:i_end]
+            ignore_codes.append(match_text)
         print(f"\nIgnoring codes:\n  {', '.join(ignore_codes)}")
 
     checker = check_dataset(

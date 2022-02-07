@@ -397,11 +397,11 @@ class TestChecker_MeshVariables(DatasetChecker):
             scan,
             statements=[
                 ("R105", msg),
-                ("R107", '"topology".*not a list of variables in the dataset'),
+                ("R108", '"topology".*not a list of variables in the dataset'),
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_empty(self, scan_2d_and_meshvar):
+    def test_r105_r108_mesh_badcoordattr_empty(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         meshvar.attributes["node_coordinates"] = ""
         msg = (
@@ -412,11 +412,11 @@ class TestChecker_MeshVariables(DatasetChecker):
             scan,
             statements=[
                 ("R105", msg),
-                ("R107", '"topology".*not a list of variables'),
+                ("R108", '"topology".*not a list of variables'),
             ],
         )
 
-    def test_r105_r107_mesh_badcoordattr_invalidname(
+    def test_r105_r108_mesh_badcoordattr_invalidname(
         self, scan_2d_and_meshvar
     ):
         scan, meshvar = scan_2d_and_meshvar
@@ -429,7 +429,7 @@ class TestChecker_MeshVariables(DatasetChecker):
             scan,
             statements=[
                 ("R105", msg),
-                ("R107", '"topology".*not a list of variables'),
+                ("R108", '"topology".*not a list of variables'),
             ],
         )
 
@@ -444,11 +444,11 @@ class TestChecker_MeshVariables(DatasetChecker):
             scan,
             statements=[
                 ("R106", msg),
-                ("R107", '"topology".*not a list of variables in the dataset'),
+                ("R108", '"topology".*not a list of variables in the dataset'),
             ],
         )
 
-    def test_r106a_mesh_badconn_multiplevars(self, scan_2d_and_meshvar):
+    def test_r107_mesh_badconn_multiplevars(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         # Checking for multiple entries in a connectivity attribute.
         # Create extra custom variables, copying 'node_lat'
@@ -462,9 +462,9 @@ class TestChecker_MeshVariables(DatasetChecker):
             'face_node_connectivity="node_lat_2 node_lat_3"'
             ", which contains 2 names, instead of 1."
         )
-        self.check(scan, "", msg)
+        self.check(scan, "R107", msg)
 
-    def test_r108_mesh_badconn_empty(self, scan_2d_and_meshvar):
+    def test_r109_mesh_badconn_empty(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         # Checking the catchall error for an invalid mesh-coord attribute.
         # This is always caused by a subsidiary specific error, so for testing
@@ -483,7 +483,7 @@ class TestChecker_MeshVariables(DatasetChecker):
                     ),
                 ),
                 (
-                    "R108",
+                    "R109",
                     (
                         '"topology" has face_node_connectivity=""'
                         ".*not a list of variables in the dataset"
@@ -836,7 +836,7 @@ class TestChecker_MeshVariables(DatasetChecker):
             "has an attribute 'boundary_dimension', which is "
             "not a valid UGRID term"
         )
-        self.check(scan, "", msg)  # TODO: will be "A105"
+        self.check(scan, "A106", msg)
 
     def test_a105_mesh_invalid_nodedim(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
@@ -845,7 +845,7 @@ class TestChecker_MeshVariables(DatasetChecker):
             "has an attribute 'node_dimension', which is "
             "not a valid UGRID term"
         )
-        self.check(scan, "", msg)  # TODO: will be "A105"
+        self.check(scan, "A106", msg)
 
     def test_a106_mesh_unwanted_edgedim(self, scan_0d_and_meshvar):
         scan, meshvar = scan_0d_and_meshvar
@@ -854,8 +854,7 @@ class TestChecker_MeshVariables(DatasetChecker):
             "has an attribute 'edge_dimension', which is not valid.*"
             r"no 'edge_node_connectivity'\."
         )
-        #  TODO: will be "A106" -- or possibly "Rxxx" ?
-        self.check(scan, "", msg)
+        self.check(scan, "R123", msg)
 
     def test_a106_mesh_unwanted_facedim(self, scan_0d_and_meshvar):
         scan, meshvar = scan_0d_and_meshvar
@@ -864,8 +863,7 @@ class TestChecker_MeshVariables(DatasetChecker):
             "has an attribute 'face_dimension', which is not valid.*"
             r"no 'face_node_connectivity'\."
         )
-        #  TODO: will be "A106" -- or possibly "Rxxx" ?
-        self.check(scan, "", msg)
+        self.check(scan, "R122", msg)
 
 
 class TestChecker_DataVariables(DatasetChecker):
