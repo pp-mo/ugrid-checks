@@ -28,14 +28,14 @@ repos:
     -   id: no-commit-to-branch
 
 -   repo: https://github.com/psf/black
-    rev: 21.9b0
+    rev: 22.1.0
     hooks:
     -   id: black
         pass_filenames: false
         args: [--config=./pyproject.toml, .]
 
 -   repo: https://github.com/PyCQA/flake8
-    rev: 3.9.2
+    rev: 4.0.1
     hooks:
     -   id: flake8
         types: [file, python]
@@ -49,7 +49,7 @@ repos:
         args: [--filter-files]
 
 -   repo: https://github.com/asottile/blacken-docs
-    rev: v1.11.0
+    rev: v1.12.1
     hooks:
     -   id: blacken-docs
         types: [file, rst]
