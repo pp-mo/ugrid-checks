@@ -1,7 +1,7 @@
 [build-system]
 # Defined by PEP 518
 requires = [
-  "setuptools>=40.8.0",
+  "setuptools>=45",
   "wheel",
 ]
 # Defined by PEP 517
