@@ -1,0 +1,5 @@
+# top-level files
+include LICENSE README.md
+
+# exclude package tests
+prune lib/ugrid_checks/tests
