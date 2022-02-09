@@ -102,7 +102,7 @@ Done.
 ```
 
 ## Command line : structure analysis
-The ``-s`` / ``--structure`` prints a summary of the mesh content.
+The ``-s`` / ``--summary`` option prints a summary of the mesh content.
 ```commandline
 > ugrid-checker data_C4.nc --summary --quiet
 
@@ -143,6 +143,12 @@ It is intended that these checks will be added later, enabled by a new flag such
 
 
 ## Python API
+The checker is provided as an importable module "ugrid_checks".
+
+Running the module directly calls the command-line interface,
+e.g. `$ python -m ugrid_checks file.nc` is just the same as `$ ugrid-checker file.nc`. 
+
+Within Python, the module can be used like this : 
 ```ignorelang
 >>> from ugrid_checks.check import check_dataset
 >>> print(check_dataset.__doc__)
