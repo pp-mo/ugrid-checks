@@ -9,9 +9,10 @@ and can also produce a summary of the mesh content of a file.
   * [Installation](#installation)
   * [Command Line : checking](#command-line--checking)
     * [Basic usage](#basic-usage)
-    * [Controlling Rules](#controlling-rules)
-    * [List of all Conformance Rules](#listing-of-all-conformance-rules)
+    * [Controlling checks](#controlling-checks)
   * [Command Line : structure analysis](#command-line--structure-analysis)
+  * [List of Conformance Rules and codes](#list-of-conformance-rules-and-codes)
+  * [Limitations](#limitations)
   * [Python API](#python-api)
   * [Runtime Requirements](#requirements)
 
@@ -58,7 +59,6 @@ UGRID conformance checks complete.
 No problems found.
 
 Done.
-
 >
 ```
 ```commandline
@@ -79,11 +79,12 @@ Done.
 >
 ```
 
-### Controlling rules
+### Controlling checks
 The ``-e`` / ``--errorsonly`` option checks only against the requirements (aka "errors"),
 and skips the recommendations (aka "warnings").
 
-The ``-i`` / ``--ignore`` option skips particular checks according to their Axxx/Rxxx codes.
+The ``-i`` / ``--ignore`` option skips particular checks according to their Axxx/Rxxx codes.  
+See [List of codes](#list-of-conformance-rules-and-codes).
 
 Example:
 ```commandline
@@ -99,16 +100,6 @@ No problems found.
 Done.
 >
 ```
-
-### Listing of all Conformance Rules
-All the error/warning codes used are defined in the UGRID conformance rules.
-Each has an identifying code, "Rxxx" for requirements or "Axxx" for advisory rules.
-
-See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
-
-Note : these are currently *only* available in this preliminary draft version,
-not yet accepted into the UGRID spec.
-
 
 ## Command line : structure analysis
 The ``-s`` / ``--structure`` prints a summary of the mesh content.
@@ -132,6 +123,24 @@ Mesh Data Variables
 
 >
 ```
+
+## List of Conformance Rules and codes
+All the error/warning codes used are defined in the UGRID conformance rules. 
+Each has an identifying code : "Rxxx" for requirements or "Axxx" for advisory rules.
+
+See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
+
+Note : these are currently *only* available in this preliminary draft version,
+not yet accepted into the UGRID spec.
+
+## Limitations
+#### No data value checks
+At present, none of the rules which test *actual data values in variables* are implemented.  
+   - For example : [A305](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/#A305) --
+    "a connectivity that contains missing indices should have a `_Fillvalue` property"
+
+It is intended that these checks will be added later, enabled by a new flag such as ```--datachecks```
+
 
 ## Python API
 ```ignorelang
