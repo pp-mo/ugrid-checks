@@ -14,7 +14,7 @@ and can also produce a summary of the mesh content of a file.
   * [List of Conformance Rules and codes](#list-of-conformance-rules-and-codes)
   * [Limitations](#limitations)
   * [Python API](#python-api)
-  * [Runtime Requirements](#requirements)
+  * [Runtime Requirements](#runtime-requirements)
 
 
 ## Installation
