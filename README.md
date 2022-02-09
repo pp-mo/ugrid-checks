@@ -102,7 +102,7 @@ $
 ```
 
 ## Command line : structure analysis
-The ``-s`` / ``--summary`` option prints a summary of the mesh content.
+The ``-s`` / ``--summary`` option prints a summary of a file's mesh content.
 ```commandline
 $ ugrid-checker data_C4.nc --summary --quiet
 
@@ -178,8 +178,12 @@ Within Python, the module can be used like this :
 
     
 >>>
->>> checker = check_dataset('data_C4_warn.nc')
-
+>>> checker = check_dataset('data_C4_warn.nc', print_summary=False)
+>>> 
+>>> type(checker)
+<class 'ugrid_checks.check.Checker'>
+>>>
+>>> print(checker.checking_report())
 UGRID conformance checks complete.
 
 List of checker messages :
@@ -190,9 +194,6 @@ Total of 1 problems logged :
   1 Axxx advisory recommendation warnings
 
 Done.
->>> 
->>> type(checker)
-<class 'ugrid_checks.check.Checker'>
 >>> 
 >>> print(checker.structure_report())
 Meshes
