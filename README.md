@@ -86,7 +86,7 @@ Done.
 The ``-e`` / ``--errorsonly`` option checks only against the requirements (aka "errors"),
 and skips the recommendations (aka "warnings").
 
-The ``-i`` / ``--ignore`` option skips particular checks by their code.
+The ``-i`` / ``--ignore`` option skips particular checks according to their Axxx/Rxxx codes.
 
 Example:
 ```commandline
@@ -135,9 +135,9 @@ Mesh Data Variables
 ```
 
 ## Python API
-```python
+```ignorelang
 >>> from ugrid_checks.check import check_dataset
->>> checker = print(check_dataset.__doc__)
+>>> print(check_dataset.__doc__)
 
     Run UGRID conformance checks on a file.
 
@@ -164,7 +164,7 @@ Mesh Data Variables
 
     
 >>>
->>> check_dataset('data_C4_warn.nc')
+>>> checker = check_dataset('data_C4_warn.nc')
 
 UGRID conformance checks complete.
 
