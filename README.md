@@ -27,7 +27,7 @@ To install:
 
 ## Command Line : checking
 ```commandline
-> ugrid-checker -h
+$ ugrid-checker -h
 usage: ugrid-checker [-h] [-q] [-e] [-s] [--nonmesh] [-i IGNORE] [-v] file
 
 Check a netcdf-CF file for conformance to the UGRID conventions.
@@ -47,22 +47,22 @@ optional arguments:
   -i IGNORE, --ignore IGNORE
                         a list of errorcodes to ignore.
   -v, --version         print version information
->
+$
 ```
 
 ### Basic usage
 ```commandline
-> ugrid-checker data_C4.nc
+$ ugrid-checker data_C4.nc
 
 UGRID conformance checks complete.
 
 No problems found.
 
 Done.
->
+$
 ```
 ```commandline
-> ugrid-checker data_C4_warn_error.nc 
+$ ugrid-checker data_C4_warn_error.nc 
 
 UGRID conformance checks complete.
 
@@ -76,7 +76,7 @@ Total of 3 problems logged :
   1 Axxx advisory recommendation warnings
 
 Done.
->
+$
 ```
 
 ### Controlling checks
@@ -88,7 +88,7 @@ See [List of codes](#list-of-conformance-rules-and-codes).
 
 Example:
 ```commandline
-> ugrid-checker data_C4_warn_error.nc --errorsonly --ignore r106,r108
+$ ugrid-checker data_C4_warn_error.nc --errorsonly --ignore r106,r108
 
 Ignoring codes:
   R106, R108
@@ -98,13 +98,13 @@ UGRID conformance checks complete.
 No problems found.
 
 Done.
->
+$
 ```
 
 ## Command line : structure analysis
 The ``-s`` / ``--summary`` option prints a summary of the mesh content.
 ```commandline
-> ugrid-checker data_C4.nc --summary --quiet
+$ ugrid-checker data_C4.nc --summary --quiet
 
 File mesh structure
 -------------------
@@ -121,7 +121,7 @@ Mesh Data Variables
         mesh : "topology"
         location : "face"
 
->
+$
 ```
 
 ## List of Conformance Rules and codes
@@ -145,8 +145,8 @@ It is intended that these checks will be added later, enabled by a new flag such
 ## Python API
 The checker is provided as an importable module "ugrid_checks".
 
-Running the module directly calls the command-line interface,
-e.g. `$ python -m ugrid_checks file.nc` is just the same as `$ ugrid-checker file.nc`. 
+Running the module directly calls the command-line interface,  
+e.g. `$ python -m ugrid_checks file.nc` is the same as `$ ugrid-checker file.nc`. 
 
 Within Python, the module can be used like this : 
 ```ignorelang
@@ -209,6 +209,10 @@ Mesh Data Variables
         location : "face"
 >>>
 ```
+
+For the time being, there is no built API documentation :
+Please refer to code docstrings for more detail. 
+
 
 ## Runtime Requirements
   * Python >= 3.7
