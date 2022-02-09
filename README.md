@@ -1,13 +1,19 @@
 # ugrid-checks
+**Version : 0.1 (beta)**
 
-A utility to check netcdf files against the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
+A utility to check netcdf files to the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
 
 It tests files against the UGRID conformance rules, and can also produce a
-summary of the mesh content in a file. 
+summary of the mesh content in a file.
 
-Current version : 0.1 (beta)
+  * [Installation](#installation)
+    * [Requirements](#requirements)
+  * [Command Line : checking](#command-line--checking)
+    * [Basic usage](#basic-usage)
+    * [Controlling Rules](#controlling-rules)
+  * [Command Line : structure analysis](#command-line--structure-analysis)
+  * [Python API](#python-api)
 
-[TOC]
 
 ## Installation
 Available on PyPI.
