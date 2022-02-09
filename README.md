@@ -8,6 +8,7 @@ summary of the mesh content in a file.
 
   * [Installation](#installation)
     * [Requirements](#requirements)
+  * [Conformance rules](#conformance-rules)
   * [Command Line : checking](#command-line--checking)
     * [Basic usage](#basic-usage)
     * [Controlling Rules](#controlling-rules)
@@ -26,6 +27,15 @@ To install:
 ### Requirements
   * Python >= 3.7
   * [netCDF4](https://github.com/Unidata/netcdf4-python)
+
+## Conformance rules
+All the error/warning codes used are defined in the UGRID conformance rules.
+Each has an identifying code, "Rxxx" for requirements or "Axxx" for advisory rules.
+
+See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
+
+Note : these are currently *only* available in this preliminary draft version,
+not yet accepted into the UGRID spec.
 
 ## Command Line : checking
 ```commandline
@@ -102,13 +112,6 @@ No problems found.
 Done.
 >
 ```
-
-### Code references
-The error/warning codes used are defined in the UGRID conformance rules.
-See a list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
-
-Note : these are currently *only* available in this preliminary draft version,
-not yet accepted into the UGRID spec.
 
 
 ## Command line : structure analysis
