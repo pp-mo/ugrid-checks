@@ -141,6 +141,11 @@ At present, none of the rules which test *actual data values in variables* are i
 
 It is intended that these checks will be added later, enabled by a new flag such as ```--datachecks```
 
+#### No 3-D / Volume support
+The draft conformance rules do not currently cover 3-d meshes, so neither does the checker code.
+There is also an ongoing discussion whether it is needed to "fix" this feature, or even to remove it in a future release of UGRID.
+See [this developer discusssion](https://github.com/ugrid-conventions/ugrid-conventions/issues/53#issuecomment-832138564).  
+Alternatively, this can be added in future.
 
 ## Python API
 The checker is provided as an importable module "ugrid_checks".
