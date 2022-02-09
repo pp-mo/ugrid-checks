@@ -3,17 +3,17 @@
 
 A utility to check netcdf files to the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
 
-It tests files against the UGRID conformance rules, and can also produce a
-summary of the mesh content in a file.
+It tests files against the UGRID [conformance rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/),
+and can also produce a summary of the mesh content of a file.
 
   * [Installation](#installation)
-    * [Requirements](#requirements)
-  * [Conformance rules](#conformance-rules)
   * [Command Line : checking](#command-line--checking)
     * [Basic usage](#basic-usage)
     * [Controlling Rules](#controlling-rules)
+    * [List of all Conformance Rules](#listing-of-all-conformance-rules)
   * [Command Line : structure analysis](#command-line--structure-analysis)
   * [Python API](#python-api)
+  * [Runtime Requirements](#requirements)
 
 
 ## Installation
@@ -23,19 +23,6 @@ To install:
 ```commandline
 > pip install ugrid-checker
 ```
-
-### Requirements
-  * Python >= 3.7
-  * [netCDF4](https://github.com/Unidata/netcdf4-python)
-
-## Conformance rules
-All the error/warning codes used are defined in the UGRID conformance rules.
-Each has an identifying code, "Rxxx" for requirements or "Axxx" for advisory rules.
-
-See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
-
-Note : these are currently *only* available in this preliminary draft version,
-not yet accepted into the UGRID spec.
 
 ## Command Line : checking
 ```commandline
@@ -62,7 +49,7 @@ optional arguments:
 >
 ```
 
-### Basic usage.
+### Basic usage
 ```commandline
 > ugrid-checker data_C4.nc
 
@@ -92,7 +79,7 @@ Done.
 >
 ```
 
-#### Controlling rules
+### Controlling rules
 The ``-e`` / ``--errorsonly`` option checks only against the requirements (aka "errors"),
 and skips the recommendations (aka "warnings").
 
@@ -112,6 +99,15 @@ No problems found.
 Done.
 >
 ```
+
+### Listing of all Conformance Rules
+All the error/warning codes used are defined in the UGRID conformance rules.
+Each has an identifying code, "Rxxx" for requirements or "Axxx" for advisory rules.
+
+See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
+
+Note : these are currently *only* available in this preliminary draft version,
+not yet accepted into the UGRID spec.
 
 
 ## Command line : structure analysis
@@ -198,3 +194,8 @@ Mesh Data Variables
         location : "face"
 >>>
 ```
+
+## Runtime Requirements
+  * Python >= 3.7
+  * [netCDF4](https://github.com/Unidata/netcdf4-python)
+
