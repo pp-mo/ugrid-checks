@@ -15,6 +15,8 @@ and can also produce a summary of the mesh content of a file.
   * [Limitations](#limitations)
   * [Python API](#python-api)
   * [Runtime Requirements](#runtime-requirements)
+  * [Known Issues](#known-issues)
+  * [Changelog](#changelog)
 
 
 ## Installation
@@ -224,3 +226,11 @@ Please refer to code docstrings for more detail.
   * Python >= 3.7
   * [netCDF4](https://github.com/Unidata/netcdf4-python)
 
+## Known Issues
+  * The ``--summary`` mode does not output optional connectivites, only required ones.  
+    See : https://github.com/pp-mo/ugrid-checks/issues/20
+
+## Changelog
+  * TBA (move to separate file ?)
+  * **v0.1.0**
+    * release 2022-02-09
