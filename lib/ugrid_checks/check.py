@@ -1560,6 +1560,21 @@ class Checker:
                         if coord_name in mesh_var.attributes:
                             coords = varlist_str(mesh_var, coord_name)
                             line(f"coordinates : {coords}", 3)
+                # List *optional* connectivities of the mesh
+                # N.B. "<x>_node..." are required : shown above with location
+                # All others are 'optional' : list these in a separate section
+                optional_conns = []
+                for attr_name in _VALID_CONNECTIVITY_ROLES:
+                    if attr_name.split("_")[1] != "node":
+                        attr_value = property_as_single_name(
+                            mesh_var.attributes.get(attr_name)
+                        )
+                        if attr_value:
+                            optional_conns.append((attr_name, attr_value))
+                if optional_conns:
+                    line("optional connectivities", 2)
+                    for attr_name, attr_value in optional_conns:
+                        line(f'{attr_name} : "{attr_value}"', 3)
 
         if self._lis_vars:
             line("")
