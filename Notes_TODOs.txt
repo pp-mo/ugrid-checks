@@ -1,3 +1,6 @@
+* TO FIX: missed optional connectivites from --summary
+    - see : https://github.com/pp-mo/ugrid-checks/issues/20
+    - also moving-point branch "summary_optional_conns"
 * more code changes, coming out of Iris code
     - dimension length counting points of a face : >= 3
         --> similar other possibles ??

@@ -492,13 +492,13 @@ class TestChecker_MeshVariables(DatasetChecker):
             ],
         )
 
-    def test_r109_mesh_missing_node_coords(self, scan_2d_and_meshvar):
+    def test_r110_mesh_missing_node_coords(self, scan_2d_and_meshvar):
         scan, meshvar = scan_2d_and_meshvar
         del meshvar.attributes["node_coordinates"]
         msg = "does not have a 'node_coordinates' attribute"
-        self.check(scan, "R109", msg)
+        self.check(scan, "R110", msg)
 
-    def test_r110_mesh_topologydim0_extra_edgeconn(self, scan_0d_and_meshvar):
+    def test_r111_mesh_topologydim0_extra_edgeconn(self, scan_0d_and_meshvar):
         scan, meshvar = scan_0d_and_meshvar
         # Add extra dims and a variable, to mimic edge-node connectivity.
         # (which is not valid in a 0-d mesh)
@@ -517,9 +517,9 @@ class TestChecker_MeshVariables(DatasetChecker):
             'has topology_dimension="0", but the presence of.*'
             "'edge_node_connectivity'.*implies it should be 1."
         )
-        self.check(scan, "R110", msg)
+        self.check(scan, "R111", msg)
 
-    def test_r111_mesh_topologydim1_missing_edgeconn(
+    def test_r112_mesh_topologydim1_missing_edgeconn(
         self, scan_1d_and_meshvar
     ):
         scan, meshvar = scan_1d_and_meshvar
@@ -530,9 +530,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         # Also avoid checking the data-variable, which now has a dim problem.
         del scan.variables["sample_data"].attributes["mesh"]
         msg = 'has topology_dimension="1", but.*' "no 'edge_node_connectivity'"
-        self.check(scan, "R111", msg)
-
-    # NOTE: R112 is to be removed
+        self.check(scan, "R112", msg)
 
     def test_r113_mesh_topologydim2_missing_faceconn(
         self, scan_1d_and_meshvar
