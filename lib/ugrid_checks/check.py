@@ -660,22 +660,19 @@ class Checker:
             if topology_dimension != appropriate_dim:
                 if topology_dimension == 0:
                     if appropriate_dim == 1:
-                        errcode = "R110"  # unexpected edge-node
+                        errcode = "R111"  # unexpected edge-node
                     else:
                         assert appropriate_dim == 2
                         errcode = "R113"  # unexpected face-node
                 elif topology_dimension == 1:
                     if appropriate_dim == 0:
-                        errcode = "R111"  # missing edge-node
+                        errcode = "R112"  # missing edge-node
                     else:
                         assert appropriate_dim == 2
                         errcode = "R113"  # unexpected face-node
                 else:
                     assert topology_dimension == 2
                     errcode = "R113"  # missing face-node
-                #
-                # TODO: remove R112 -- "may" is not testable !!
-                #
 
                 if topology_dimension < appropriate_dim:
                     # something is extra
@@ -728,7 +725,7 @@ class Checker:
 
         if "node_coordinates" not in meshvar.attributes:
             log_meshvar(
-                "R109", "does not have a 'node_coordinates' attribute."
+                "R110", "does not have a 'node_coordinates' attribute."
             )
         else:
             # Note: if a 'node_coordinates' attribute exists, then we already
@@ -781,6 +778,7 @@ class Checker:
                         "a dimension in the dataset."
                     )
                     log_meshvar(errcode, msg)
+
             elif connattr_name in meshvar.attributes:
                 # No "xxx_dimension" attribute, but we *do* have
                 # "xxx_node_connectivity", so mesh does _have_ this location.
