@@ -229,6 +229,8 @@ Please refer to code docstrings for more detail.
 ## Known Issues
   * The ``--summary`` mode does not output optional connectivites, only required ones.  
     See : https://github.com/pp-mo/ugrid-checks/issues/20
+  * Some statement codes are mis-numbered in the v0.1 release (now fixed on main).  
+    See https://github.com/pp-mo/ugrid-checks/issues/21
 
 ## Changelog
   * TBA (move to separate file ?)
