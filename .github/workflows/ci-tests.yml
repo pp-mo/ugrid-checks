@@ -1,31 +1,47 @@
 # A workflow to do PR test runs
+#
+# Reference:
+#   - https://github.com/actions/checkout
+#   - https://github.com/conda-incubator/setup-miniconda
 
-name: pr-tests
+name: ci-tests
 
-on:
-  # Triggers the workflow on push or pull request events but only for the master branch
-  pull_request:
+# Triggers the workflow on pull-request or push events
+on: [pull_request, push]
 
 jobs:
   tests:
+    name: "Test Python ${{ matrix.version }}"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    strategy:
+      matrix:
+        version: ["3.7", "3.8", "3.9", "3.10"]
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v2
+      - name: "Create conda environment"
+        uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: 3.8
+          activate-environment: testenv
+          python-version: ${{ matrix.version }}
+          channels: conda-forge,defaults
+          show-channel-urls: true
 
-      - name: create conda test env
-        run: $CONDA/bin/conda create -n testenv python=3.8
-
-      - name: install dependencies
-        run: $CONDA/bin/conda install -n testenv pytest netCDF4
-
-      - name: run tests
+      - name: "Install dependencies"
         run: |
-          source $CONDA/bin/activate testenv
-          pytest lib/ugrid_checks/tests
+          conda install --yes pytest netCDF4
+          python -m pip install --no-deps --editable .
+
+      - name: "Conda info"
+        run: |
+          conda info
+          conda list --explicit
+
+      - name: "Run tests"
+        run: |
+          pytest --pyargs ugrid_checks
