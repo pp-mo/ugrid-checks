@@ -1,6 +1,8 @@
 # ugrid-checks
 
-[![ci-tests](https://github.com/pp-mo/ugrid-checks/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/pp-mo/ugrid-checks/actions/workflows/ci-tests.yml)
+[![ci-tests](https://github.com/pp-mo/ugrid-checks/actions/workflows/ci-tests.yml/badge.svg?branch=main)](https://github.com/pp-mo/ugrid-checks/actions/workflows/ci-tests.yml)
+[![ci-wheels](https://github.com/pp-mo/ugrid-checks/actions/workflows/ci-wheels.yml/badge.svg?branch=main)](https://github.com/pp-mo/ugrid-checks/actions/workflows/ci-wheels.yml)
+[![conda-forge](https://img.shields.io/conda/vn/conda-forge/ugrid-checks?color=orange&label=conda-forge&logo=conda-forge&logoColor=white)](https://anaconda.org/conda-forge/ugrid-checks)
 [![pypi](https://img.shields.io/pypi/v/ugrid-checks?color=orange&label=pypi&logo=python&logoColor=white)](https://pypi.org/project/ugrid-checks)
 [![bsd-3-clause](https://img.shields.io/github/license/pp-mo/ugrid-checks)](https://github.com/pp-mo/ugrid-checks/blob/main/LICENSE)
 [![black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
