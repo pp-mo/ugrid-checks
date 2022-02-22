@@ -1,4 +1,5 @@
-# A workflow to build, test and publish PyPI sdist/bdist artifacts
+# A workflow to build + test PyPI sdist/bdist artifacts
+#  (but not publish, as this is tricky without continuous automatic version generation)
 #
 # Reference:
 #   - https://github.com/actions/checkout
@@ -6,8 +7,6 @@
 #   - https://github.com/actions/setup-python
 #   - https://github.com/actions/upload-artifact
 #   - https://github.com/pypa/build
-#   - https://github.com/pypa/gh-action-pypi-publish
-#   - https://test.pypi.org/help/#apitoken
 
 name: ci-wheels
 
@@ -60,43 +59,3 @@ jobs:
         python -m pip install ugrid_checks-*.whl
         python -c "import ugrid_checks; print(f'Successfully imported ugrid-checks-{ugrid_checks.__version__}')"
         echo "All done 👍"
-
-
-  publish-artifacts-test-pypi:
-    needs: [test-artifacts]
-    name: "Publish to Test PyPI"
-    runs-on: ubuntu-latest
-    # upload to Test PyPI for every commit on main branch
-    if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/download-artifact@v2
-      with:
-        name: pypi-artifacts
-        path: ${{ github.workspace }}/dist
-
-    - uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        user: __token__
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository_url: https://test.pypi.org/legacy/
-        skip_existing: true
-        print_hash: true
-
-
-  publish-artifacts-pypi:
-    needs: [test-artifacts]
-    name: "Publish to PyPI"
-    runs-on: ubuntu-latest
-    # upload to PyPI for every tag starting with 'v'
-    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/v')
-    steps:
-    - uses: actions/download-artifact@v2
-      with:
-        name: pypi-artifacts
-        path: ${{ github.workspace }}/dist
-
-    - uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        user: __token__
-        password: ${{ secrets.PYPI_API_TOKEN }}
-        print_hash: true
