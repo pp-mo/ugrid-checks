@@ -9,7 +9,8 @@ import numpy as np
 from pytest import fixture
 from ugrid_checks.check import check_dataset
 from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
-from ugrid_checks.tests import cdl_scanner, next_mesh, next_var
+
+from .. import cdl_scanner, next_mesh, next_var
 
 # Prevent error from 'black' about unused import.
 # NOTE : the import is *not* in fact redundant, since pytest requires it.
