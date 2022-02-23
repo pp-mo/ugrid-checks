@@ -10,12 +10,19 @@ from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
 
 from .. import simple_scan
 from ... import cdl_scanner
-from ..test_check_dataset__checks import DatasetChecker, scan_0d_mesh
+from ..test_check_dataset__checks import (
+    DatasetChecker,
+    scan_0d_mesh,
+    scan_1d_mesh,
+    scan_2d_mesh,
+)
 
 # Yes, we do need these imports.
 cdl_scanner
 simple_scan
 scan_0d_mesh
+scan_1d_mesh
+scan_2d_mesh
 
 
 from ugrid_checks.check import Checker
@@ -37,21 +44,22 @@ def nomesh_scan(cdl_scanner):
 
 
 @fixture
-def nomesh_checker(nomesh_scan):
-    return Checker(nomesh_scan)
-
-
-@fixture
-def simple_mesh_checker(simple_scan):
+def simple_scan_w_nonmesh(simple_scan):
     # Add an extra non-mesh dim and variable, for nonmesh output testing.
-    simple_scan.dimensions["x_dim"] = NcDimSummary(3)
-    simple_scan.variables["x_data"] = NcVariableSummary(
+    scan = simple_scan
+    scan.dimensions["x_dim"] = NcDimSummary(3)
+    scan.variables["x_data"] = NcVariableSummary(
         name="x_data", dimensions=("x_dim",), shape=(3,), dtype=np.int32
     )
-    return Checker(simple_scan)
+    return scan
 
 
-class Test_CheckReport(DatasetChecker):
+class Test_StructureReport(DatasetChecker):
+    def get_report(self, scan, include_nonmesh=False):
+        text = Checker(scan).structure_report(include_nonmesh=include_nonmesh)
+        print(text)
+        return text
+
     def expect_in_text(self, text, expects):
         """
         Check that a (list of) expected regular-expressions occur in a text,
@@ -83,14 +91,14 @@ class Test_CheckReport(DatasetChecker):
                 unmatched_expects.append(expect)
         assert unmatched_expects == []
 
-    def test_empty__nomesh__meshonly(self, nomesh_checker):
-        result = nomesh_checker.structure_report()
+    def test_empty__nomesh__meshonly(self, nomesh_scan):
+        result = self.get_report(nomesh_scan)
         expect = "Meshes : <none>"
         self.expect_in_text(result, expect)
 
-    def test_empty__nomesh__w_nonmesh(self, nomesh_checker):
+    def test_empty__nomesh__w_nonmesh(self, nomesh_scan):
         # Do "include_nonmesh", on a no-mesh dataset.
-        result = nomesh_checker.structure_report(include_nonmesh=True)
+        result = self.get_report(nomesh_scan, include_nonmesh=True)
         expects = [
             "Meshes : <none>",
             r'Non-mesh[^\n]*\n *dimensions:\n *"x"',
@@ -98,9 +106,9 @@ class Test_CheckReport(DatasetChecker):
         ]
         self.expect_in_text(result, expects)
 
-    def test_basic__meshonly(self, simple_mesh_checker):
+    def test_basic__meshonly(self, simple_scan_w_nonmesh):
         # Simple case : just for this, do a full text comparison.
-        text = simple_mesh_checker.structure_report()
+        text = self.get_report(simple_scan_w_nonmesh)
         text_lines = text.split("\n")
         expected_lines = [
             "Meshes",
@@ -115,9 +123,9 @@ class Test_CheckReport(DatasetChecker):
         ]
         assert text_lines == expected_lines
 
-    def test_basic__w_nonmesh(self, simple_mesh_checker):
+    def test_basic__w_nonmesh(self, simple_scan_w_nonmesh):
         # Check the "nonmesh" output : another full-text check.
-        text = simple_mesh_checker.structure_report(include_nonmesh=True)
+        text = self.get_report(simple_scan_w_nonmesh, include_nonmesh=True)
         text_lines = text.split("\n")
         expected_lines = [
             "Meshes",
@@ -138,16 +146,150 @@ class Test_CheckReport(DatasetChecker):
         ]
         assert text_lines == expected_lines
 
+    def test_missing_node_coords(self, simple_scan):
+        scan = simple_scan
+        del scan.variables["topology"].attributes["node_coordinates"]
+        text = Checker(scan).structure_report()
+        expects = [
+            (
+                'Meshes\n *"topology"\n *'
+                r"\<\? no node coordinates or dimension \?\>"
+            ),
+        ]
+        self.expect_in_text(text, expects)
+
+    def test_multiple_locations(self, scan_2d_mesh):
+        # Test with locations other than 'node'
+        text = Checker(scan_2d_mesh).structure_report()
+        expects = [
+            (
+                r'  node\("num_node"\)'
+                '\n *coordinates : "node_lat", "node_lon"\n'
+            ),
+            r'  face\("face_dim"\)\n',
+            '  face_node_connectivity : "face_nodes"\n',
+            '  coordinates : "latitude", "longitude"\n',
+        ]
+        self.expect_in_text(text, expects)
+
+    def test_no_face_coords(self, scan_2d_mesh):
+        # Test with node coords but no face coords
+        del scan_2d_mesh.variables["topology"].attributes["face_coordinates"]
+        text = Checker(scan_2d_mesh).structure_report()
+        assert 'coordinates : "latitude", "longitude"' not in text
+
     def test_lis(self, scan_0d_mesh):
-        # Check reporting of a location-index set
+        # Test with a location-index set
         scan = scan_0d_mesh
         self._convert_to_lis(scan)
         text = Checker(scan).structure_report()
-        print(text)
         expects = [
-            "Location Index Sets",
-            r'"lis" \(lis_nodes\)',
-            'mesh : "topology"',
-            "location : node",
+            "\nLocation Index Sets",
+            r'  "lis" \(lis_nodes\)',
+            '  mesh : "topology"',
+            "  location : node",
         ]
         self.expect_in_text(text, expects)
+
+    def test_optional_connectivities(self, scan_2d_mesh):
+        scan = scan_2d_mesh
+        self._add_edges(scan, with_facedge_conn=True)
+        text = Checker(scan).structure_report()
+        expects = [
+            "optional connectivities",
+            'face_edge_connectivity : "face_edges_var"',
+        ]
+        self.expect_in_text(text, expects)
+
+    def test_orphan_connectivities(self, scan_2d_mesh):
+        scan = scan_2d_mesh
+        self._add_edges(scan, with_facedge_conn=True)
+        del scan.variables["topology"].attributes["face_edge_connectivity"]
+        text = Checker(scan).structure_report()
+        print(text)
+        expects = [
+            ("\n" r"\?\? Connectivities with no mesh \?\?" "\n"),
+            r'  "face_edges_var" \("face_n_edges", "num_vertices"\)',
+            '  cf_role = "face_edge_connectivity"',
+        ]
+        self.expect_in_text(text, expects)
+
+    def test_extra_datavar_prop(self, scan_2d_mesh):
+        # Test output when a mesh datavar has an extra 'lis' attribute
+        scan = scan_2d_mesh
+        scan.variables["sample_data"].attributes["location_index_set"] = "junk"
+        text = Checker(scan).structure_report()
+        expects = [
+            "Mesh Data Variables",
+            '  "sample_data"',
+            '    location : "face"',
+            r'    location_index_set : \<\?\?unexpected\?\?\> "junk"',
+        ]
+        self.expect_in_text(text, expects)
+
+    def test_missing_datavar_prop(self, scan_2d_mesh):
+        # Test output when a mesh datavar has no 'location' attribute
+        scan = scan_2d_mesh
+        del scan.variables["sample_data"].attributes["location"]
+        text = Checker(scan).structure_report()
+        expects = [
+            "Mesh Data Variables",
+            '  "sample_data"',
+            '    mesh : "topology"',
+            r"    location : \<\?\?missing\?\?\>",
+        ]
+        self.expect_in_text(text, expects)
+
+    def test_nonmesh_coordbounds(self, scan_1d_mesh):
+        scan = scan_1d_mesh
+        # Add an extra variable, suitable for node-longitude bounds
+        scan.variables["lon_bounds"] = NcVariableSummary(
+            name="lon_bounds",
+            dimensions=["num_node", "num_ends"],
+            shape=(8, 2),
+            dtype=np.dtype(np.float32),
+        )
+        # At this point, it appears as a 'non-mesh var'
+        text = Checker(scan).structure_report(include_nonmesh=True)
+        expects = [
+            "Non-mesh variables and/or dimensions",
+            "  variables:",
+            '    "lon_bounds"',
+        ]
+        self.expect_in_text(text, expects)
+
+        # Reference the new var as a mesh coord bounds
+        scan.variables["node_lon"].attributes["bounds"] = "lon_bounds"
+        text = Checker(scan).structure_report(include_nonmesh=True)
+        # Now *NO* "non-mesh" section, because it is considered a mesh var
+        assert "Non-mesh" not in text
+
+    def test_nonmesh_connectivity_dims(self, scan_2d_mesh):
+        scan = scan_2d_mesh
+        self._add_edges(scan)
+        # Add an extra dimension
+        scan.dimensions["face_n_edges"] = NcDimSummary(5)
+        # This should appear in a non-mesh section
+        text = Checker(scan).structure_report(include_nonmesh=True)
+        expects = [
+            "Non-mesh variables and/or dimensions",
+            "  dimensions:",
+            '    "face_n_edges"',
+        ]
+        self.expect_in_text(text, expects)
+        # No optional connectivitites
+        assert "optional conn" not in text
+
+        # Now add a face-edge connectivity, mapping this dimension
+        self._add_faceedge_conn(scan)
+        text = Checker(scan).structure_report(include_nonmesh=True)
+        expects = [
+            "optional connectivities",
+            '  face_edge_connectivity : "face_edges_var"',
+        ]
+        self.expect_in_text(text, expects)
+        # Now *NO* "non-mesh" section, because it is considered a mesh var
+        assert "Non-mesh" not in text
+
+    def test_nonmesh_orphan_connectivity_dims(self):
+        pass

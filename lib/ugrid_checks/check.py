@@ -1656,7 +1656,7 @@ class StructureReporter:
             self._line("?? Connectivities with no mesh ??")
             for conn_name, conn_var in self.orphan_connectivities.items():
                 dims = ", ".join(f'"{dim}"' for dim in conn_var.dimensions)
-                self._line(f'"{conn_name}"  ( {dims} )', 1)
+                self._line(f'"{conn_name}" ({dims})', 1)
                 cf_role = self._varlist_str(conn_var, "cf_role")
                 self._line(f"cf_role = {cf_role}", 2)
 
@@ -1691,9 +1691,9 @@ class StructureReporter:
                     if attr:
                         value = self._varlist_str(var, attr_name)
                         if not expected:
-                            value = f"? {value}"
+                            value = f"<??unexpected??> {value}"
                     elif expected:
-                        value = "? <none>"
+                        value = "<??missing??>"
                     if value:
                         self._line(f"{attr_name} : {value}", 2)
 
