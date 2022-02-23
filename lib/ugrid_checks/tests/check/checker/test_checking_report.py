@@ -20,16 +20,20 @@ from ugrid_checks.check import Checker
 
 
 @fixture
-def test_checker(simple_incorrect_scan_and_codes):
+def test_checker_incorrect(simple_incorrect_scan_and_codes):
     scan, _ = simple_incorrect_scan_and_codes
-    checker = Checker(scan)
-    return checker
+    return Checker(scan)
+
+
+@fixture
+def test_checker_noerror(simple_scan):
+    return Checker(simple_scan)
 
 
 class Test_CheckReport(DatasetChecker):
     # Just one basic function test, for now.
-    def test_basic(self, test_checker):
-        text = test_checker.checking_report()
+    def test_basic(self, test_checker_incorrect):
+        text = test_checker_incorrect.checking_report()
         # For now, this is identical to that printed by
         # check_dataset(print_output=True).
         # See: tests.check.test_check_dataset__interface...
@@ -41,5 +45,17 @@ class Test_CheckReport(DatasetChecker):
             "2 Rxxx requirement failures.*"
             "2 Axxx advisory recommendation warnings.*"
             "Done."
+        )
+        assert re.search(check_re, text, re.DOTALL)
+
+    def test_noerror(self, test_checker_noerror):
+        text = test_checker_noerror.checking_report()
+        # For now, this is identical to that printed by
+        # check_dataset(print_output=True).
+        # See: tests.check.test_check_dataset__interface...
+        # ... Test_CheckerControls.test_printout_on
+        print(text)
+        check_re = (
+            "conformance checks complete.*" "No problems found.*" "Done."
         )
         assert re.search(check_re, text, re.DOTALL)
