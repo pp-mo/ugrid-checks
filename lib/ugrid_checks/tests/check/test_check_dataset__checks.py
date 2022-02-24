@@ -139,7 +139,6 @@ def scan_0d_mesh(cdl_scanner):
     netcdf data_C4 {
     dimensions:
         num_node = 8 ;
-        num_ends = 2 ;
 
     variables:
         double sample_data(num_node) ;
@@ -225,8 +224,8 @@ class DatasetChecker:
                 statements = [(code, message)]
         self._expect_notes(logs, statements)
 
-    @staticmethod
-    def _add_edges(scan):
+    @classmethod
+    def _add_edges(cls, scan, with_facedge_conn=False):
         # Add edges and an edge-node connectivity to a 2d scan.
         meshvar = scan.variables["topology"]
         # Check we have the 2d scan, as 1d defines a different edges dim
@@ -242,6 +241,32 @@ class DatasetChecker:
             attributes={"cf_role": "edge_node_connectivity"},
         )
         meshvar.attributes["edge_node_connectivity"] = edgenodes_name
+
+        if with_facedge_conn:
+            cls._add_faceedge_conn(scan)
+
+    @staticmethod
+    def _add_faceedge_conn(scan):
+        """
+        Add a face-edgenode (optional) connectivity to a 2d scan.
+
+        Mesh needs to have suitable varnames :  should be produced by calling
+        'self._add_edges' first.
+
+        """
+        # Now add the (optional) face-edge connectivity.
+        scan.dimensions["face_n_edges"] = NcDimSummary(4)
+        faceedge_name = "face_edges_var"
+        edgeface_conn = NcVariableSummary(
+            name=faceedge_name,
+            dimensions=["face_n_edges", "num_vertices"],
+            shape=(5, 4),
+            dtype=np.dtype(np.int64),
+            attributes={"cf_role": "face_edge_connectivity"},
+        )
+        scan.variables[faceedge_name] = edgeface_conn
+        meshvar = scan.variables["topology"]
+        meshvar.attributes["face_edge_connectivity"] = faceedge_name
 
     @staticmethod
     def _convert_to_lis(scan):
