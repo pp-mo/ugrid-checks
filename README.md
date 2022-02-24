@@ -244,7 +244,7 @@ Please refer to code docstrings for more detail.
       * [#23](https://github.com/pp-mo/ugrid-checks/pull/23) structure-report bugfixes :  
         * report optional connectivities, which were previously missing
         * report location-index-sets, which previously used to error
-      * [#26](https://github.com/pp-mo/ugrid-checks/pull/23) corrected statement codes :  
+      * [#26](https://github.com/pp-mo/ugrid-checks/pull/26) corrected statement codes :  
         Some statements in the range R109-R112 were being reported with the wrong statement code   
 
   * [**v0.1.0**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.1.0)
