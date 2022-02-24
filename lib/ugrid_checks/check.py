@@ -1624,8 +1624,9 @@ class StructureReporter:
                             coords = self._varlist_str(mesh_var, coord_name)
                             self._line(f"coordinates : {coords}", 3)
                 # List *optional* connectivities of the mesh
-                # N.B. "<x>_node..." are required : shown above with location
-                # All others are 'optional' : list these in a separate section
+                # N.B. the "<x>_node..." are required connectivities, which
+                # are displayed above, under their locations.
+                # Now display any others (optional) in a separate section.
                 optional_conns = []
                 for attr_name in _VALID_CONNECTIVITY_ROLES:
                     if attr_name.split("_")[1] != "node":
@@ -1633,11 +1634,16 @@ class StructureReporter:
                             mesh_var.attributes.get(attr_name)
                         )
                         if attr_value:
-                            optional_conns.append((attr_name, attr_value))
+                            if attr_value in self.all_file_vars:
+                                attr_text = f'"{attr_value}"'
+                            else:
+                                attr_text = f'<?nonexistent?> "{attr_value}"'
+                            optional_conns.append((attr_name, attr_text))
+
                 if optional_conns:
                     self._line("optional connectivities", 2)
-                    for attr_name, attr_value in optional_conns:
-                        self._line(f'{attr_name} : "{attr_value}"', 3)
+                    for attr_name, attr_text in optional_conns:
+                        self._line(f"{attr_name} : {attr_text}", 3)
 
         if self.lis_vars:
             self._line("")
@@ -1691,9 +1697,9 @@ class StructureReporter:
                     if attr:
                         value = self._varlist_str(var, attr_name)
                         if not expected:
-                            value = f"<??unexpected??> {value}"
+                            value = f"<?unexpected?> {value}"
                     elif expected:
-                        value = "<??missing??>"
+                        value = "<?missing?>"
                     if value:
                         self._line(f"{attr_name} : {value}", 2)
 
