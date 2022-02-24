@@ -57,9 +57,6 @@ def simple_scan_w_nonmesh(simple_scan):
 class Test_StructureReport(DatasetChecker):
     def get_report(self, scan, include_nonmesh=False):
         text = Checker(scan).structure_report(include_nonmesh=include_nonmesh)
-        print("")
-        print("---- structure report -----")
-        print(text)
         return text
 
     def expect_in_text(self, text, expects):
