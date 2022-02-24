@@ -139,7 +139,6 @@ def scan_0d_mesh(cdl_scanner):
     netcdf data_C4 {
     dimensions:
         num_node = 8 ;
-        num_ends = 2 ;
 
     variables:
         double sample_data(num_node) ;
