@@ -204,6 +204,21 @@ class Test_StructureReport(DatasetChecker):
         ]
         self.expect_in_text(text, expects)
 
+    def test_blank_connectivity(self, scan_2d_mesh):
+        scan = scan_2d_mesh
+        self._add_edges(scan)
+        # Add an extra 'face_edge_connectitivity' attribute that does *not*
+        # target a valid variable.
+        meshvar = scan.variables["topology"]
+        meshvar.attributes["face_edge_connectivity"] = "bad_feconn"
+        # This should appear with a reservation
+        text = self.get_report(scan)
+        expects = [
+            "optional connectivities",
+            r'  face_edge_connectivity : \<\?nonexistent\?\> "bad_feconn"',
+        ]
+        self.expect_in_text(text, expects)
+
     def test_orphan_connectivities(self, scan_2d_mesh):
         scan = scan_2d_mesh
         self._add_edges(scan, with_facedge_conn=True)
@@ -225,7 +240,7 @@ class Test_StructureReport(DatasetChecker):
             "Mesh Data Variables",
             '  "sample_data"',
             '    location : "face"',
-            r'    location_index_set : \<\?\?unexpected\?\?\> "junk"',
+            r'    location_index_set : \<\?unexpected\?\> "junk"',
         ]
         self.expect_in_text(text, expects)
 
@@ -238,7 +253,7 @@ class Test_StructureReport(DatasetChecker):
             "Mesh Data Variables",
             '  "sample_data"',
             '    mesh : "topology"',
-            r"    location : \<\?\?missing\?\?\>",
+            r"    location : \<\?missing\?\>",
         ]
         self.expect_in_text(text, expects)
 
@@ -293,19 +308,37 @@ class Test_StructureReport(DatasetChecker):
         # Now *NO* "non-mesh" section, because it is considered a mesh var
         assert "Non-mesh" not in text
 
-    def test_blank_connectivity(self, scan_2d_mesh):
-        scan = scan_2d_mesh
-        self._add_edges(scan)
-        # Add an extra 'face_edge_connectitivity' attribute that does *not*
-        # target a valid variable.
-        meshvar = scan.variables["topology"]
-        meshvar.attributes["face_edge_connectivity"] = "bad_feconn"
-        # This should NOT appear in either the mesh or non-mesh section
+    def test_nonmesh_orphan_connectivity_dims(self, scan_0d_mesh):
+        scan = scan_0d_mesh
+        # Add an extra dim..
+        scan.dimensions["extra_dim"] = NcDimSummary(3)
+        # .. which appears as a 'nonmesh' dim
         text = self.get_report(scan, include_nonmesh=True)
-        # ***WIP***
-        assert text != ""
-        # assert "optional conn" not in text
-        # assert 'bad_feconn' not in text
+        expects = [
+            "Non-mesh variables and/or dimensions",
+            "  dimensions:",
+            '    "extra_dim"',
+        ]
+        self.expect_in_text(text, expects)
+        assert "Connectivities with no mesh" not in text
 
-    def test_nonmesh_orphan_connectivity_dims(self):
-        pass
+        # Add an orphan connectivity which maps this dim..
+        scan.variables["extra_conn"] = NcVariableSummary(
+            name="extra",
+            dimensions=(
+                "num_node",
+                "extra_dim",
+            ),
+            shape=(3,),
+            dtype=np.dtype(np.int64),
+            attributes={"cf_role": "face_edge_connectivity"},
+        )
+        # .. which *prevents* the dim appearing as a non-mesh section
+        text = self.get_report(scan, include_nonmesh=True)
+        expects = [
+            r"\?\? Connectivities with no mesh \?\?",
+            r'  "extra_conn" \("num_node", "extra_dim"\)',
+            '  cf_role = "face_edge_connectivity"',
+        ]
+        self.expect_in_text(text, expects)
+        assert "Non-mesh" not in text
