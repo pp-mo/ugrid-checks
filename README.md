@@ -7,7 +7,7 @@
 [![bsd-3-clause](https://img.shields.io/github/license/pp-mo/ugrid-checks)](https://github.com/pp-mo/ugrid-checks/blob/main/LICENSE)
 [![black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-**Version : 0.1 (beta)**
+**Version : 0.1.1 (beta)**
 
 A utility to check netcdf files to the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
 
@@ -235,12 +235,17 @@ Please refer to code docstrings for more detail.
   * [netCDF4](https://github.com/Unidata/netcdf4-python)
 
 ## Known Issues
-  * The ``--summary`` mode does not output optional connectivites, only required ones.  
-    See : https://github.com/pp-mo/ugrid-checks/issues/20
-  * Some statement codes are mis-numbered in the v0.1 release (now fixed on main).  
-    See https://github.com/pp-mo/ugrid-checks/issues/21
+  * none at present
 
 ## Changelog
   * TBA (move to separate file ?)
-  * **v0.1.0**
+  * [**v0.1.1**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.1.1)
+    * release 2022-02-24
+      * [#23](https://github.com/pp-mo/ugrid-checks/pull/23) structure-report bugfixes :  
+        * report optional connectivities, which were previously missing
+        * report location-index-sets, which previously used to error
+      * [#26](https://github.com/pp-mo/ugrid-checks/pull/23) corrected statement codes :  
+        Some statements in the range R109-R112 were being reported with the wrong statement code   
+
+  * [**v0.1.0**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.1.0)
     * release 2022-02-09
