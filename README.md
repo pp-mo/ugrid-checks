@@ -235,7 +235,8 @@ Please refer to code docstrings for more detail.
   * [netCDF4](https://github.com/Unidata/netcdf4-python)
 
 ## Known Issues
-  * none at present
+  * can't currenly handle mixed-shape faces, due a mistake in A304
+    See #34
 
 ## Changelog
   * TBA (move to separate file ?)
