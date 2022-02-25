@@ -236,7 +236,7 @@ Please refer to code docstrings for more detail.
 
 ## Known Issues
   * can't currenly handle mixed-shape faces, due a mistake in A304
-    See #34
+    See [#34](https://github.com/pp-mo/ugrid-checks/issues/34)
 
 ## Changelog
   * TBA (move to separate file ?)
