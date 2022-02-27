@@ -1431,7 +1431,7 @@ class TestChecker_Connectivities(DatasetChecker):
         self.check(scan)
 
         # ... But an 'edge_node_connectivity' should *not* have a fill-value.
-        conn2 = scan.variables['edge_nodes']
+        conn2 = scan.variables["edge_nodes"]
         conn2.attributes["_FillValue"] = np.array(-1, dtype=conn.dtype)
         # This will raise an A304
         msg = (
