@@ -7,7 +7,7 @@
 [![bsd-3-clause](https://img.shields.io/github/license/pp-mo/ugrid-checks)](https://github.com/pp-mo/ugrid-checks/blob/main/LICENSE)
 [![black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-**Version : 0.1.1 (beta)**
+**Version : 0.1.2**
 
 A utility to check netcdf files to the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
 
