@@ -24,6 +24,7 @@ and can also produce a summary of the mesh content of a file.
   * [Python API](#python-api)
   * [Runtime Requirements](#runtime-requirements)
   * [Known Issues](#known-issues)
+  * [Raising Issues](#raising-issues)
   * [Changelog](#changelog)
 
 
