@@ -1364,7 +1364,7 @@ class TestChecker_Connectivities(DatasetChecker):
         )
         self.check(scan, "R309", msg)
 
-    # R310 -- not implementing data checks yet
+    # R310 / R311 -- not implementing data checks yet
 
     #
     # Advisory checks
@@ -1421,13 +1421,23 @@ class TestChecker_Connectivities(DatasetChecker):
         self.check(scan, "A303", msg)
 
     def test_a304_conn_unexpected_fillvalue(self, scan_2d_and_connvar):
-        # A "xxx_node_connectivity" should not have a fill-value
+        # Some connectivities should never have a fill-value.
+        # Previously applied to *any* "xxx_node_connectivity", which is wrong:
+        # should be edge-/boundary-node, but *not* face-node
         scan, conn = scan_2d_and_connvar
+        self._add_edges(scan)
         conn.attributes["_FillValue"] = np.array(-1, dtype=conn.dtype)
+        # This one is OK because it is needed for a 'flexible' 2d mesh ...
+        self.check(scan)
+
+        # ... But an 'edge_node_connectivity' should *not* have a fill-value.
+        conn2 = scan.variables['edge_nodes']
+        conn2.attributes["_FillValue"] = np.array(-1, dtype=conn.dtype)
+        # This will raise an A304
         msg = (
-            "\"face_nodes\".* has a '_FillValue' attribute, which "
+            "\"edge_nodes\".* has a '_FillValue' attribute, which "
             "should not be present on a "
-            r'"face_node_connectivity" connectivity\.'
+            r'"edge_node_connectivity" connectivity\.'
         )
         self.check(scan, "A304", msg)
 
