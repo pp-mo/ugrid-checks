@@ -527,7 +527,8 @@ class Checker:
         fill_value = conn_var.attributes.get("_FillValue")
         if (
             role_name
-            and role_name.endswith("_node_connectivity")
+            and role_name
+            in ("boundary_node_connectivity", "edge_node_connectivity")
             and fill_value is not None
         ):
             msg = (
