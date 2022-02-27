@@ -235,11 +235,18 @@ Please refer to code docstrings for more detail.
   * [netCDF4](https://github.com/Unidata/netcdf4-python)
 
 ## Known Issues
-  * can't currenly handle mixed-shape faces, due a mistake in A304.  
-    See [#34](https://github.com/pp-mo/ugrid-checks/issues/34)
+  * none known
+
+## Raising Issues
+Please create an issue in : https://github.com/pp-mo/ugrid-checks
 
 ## Changelog
-  * TBA (move to separate file ?)
+  * TODO: move to separate file ?
+  * [**v0.1.2**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.1.2)
+    * release 2022-02-27
+      * [#36](https://github.com/pp-mo/ugrid-checks/pull/36) fix to A304  
+        allow face-node-connectivity to have a _FillValue, as this is used for
+        flexible 2d meshes.
   * [**v0.1.1**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.1.1)
     * release 2022-02-24
       * [#23](https://github.com/pp-mo/ugrid-checks/pull/23) structure-report bugfixes :  
