@@ -80,16 +80,16 @@ class NcVariableSummary:
         if key == "attributes":
             # 'attributes' is always a dictionary with 0d or 1d array values.
             value = Dict_1dArray(value)
-        elif key == "data":
-            # 'data' may be None, or an array matching self.shape.
-            if value is not None:
-                value = np.asarray(value)
-                if value.shape != self.shape:
-                    msg = (
-                        f"Can't assign '.data' with shape {value.shape} "
-                        f"to {self.__class__} with shape of {self.shape}."
-                    )
-                    raise ValueError(msg)
+        # elif key == "data":
+        #     # 'data' may be None, or an array matching self.shape.
+        #     if value is not None:
+        #         value = np.asarray(value)
+        #         if value.shape != self.shape:
+        #             msg = (
+        #                 f"Can't assign '.data' with shape {value.shape} "
+        #                 f"to {self.__class__} with shape of {self.shape}."
+        #             )
+        #             raise ValueError(msg)
         super().__setattr__(key, value)
 
 
@@ -135,6 +135,8 @@ def scan_dataset(filepath) -> NcFileSummary:
     """
     import netCDF4 as nc
 
+    from ._var_data import VariableDataProxy
+
     ds = nc.Dataset(filepath)
     # dims dict is {name: len}
     dims_summary = {
@@ -158,7 +160,7 @@ def scan_dataset(filepath) -> NcFileSummary:
             shape=var.shape,
             dtype=var.dtype,
             attributes=allattrs(var),
-            data=None,  # *could* be a DataProxy, but let's not go there yet
+            data=VariableDataProxy(filepath, name),
         )
         for name, var in ds.variables.items()
     }

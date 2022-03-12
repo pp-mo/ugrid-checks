@@ -4,6 +4,7 @@ from typing import AnyStr, Dict, List, Mapping, Text, Tuple, Union
 
 import numpy as np
 
+from ._var_data import VariableDataProperties
 from .nc_dataset_scan import (
     NcDimSummary,
     NcFileSummary,
@@ -79,15 +80,18 @@ class Checker:
         self,
         file_scan: NcFileSummary,
         logger: CheckLoggingInterface = None,
-        do_data_checks: bool = False,
         ignore_warnings=False,
         ignore_codes: Union[List[str], None] = None,
+        max_mb_checks: float = 0.0,  # Don't do *any* data-checks, by default.
     ):
         self.file_scan = file_scan
         if logger is None:
             logger = CheckLoggingInterface()
         self.logger = logger
-        self.do_data_checks = do_data_checks
+        if max_mb_checks < 0:
+            max_mb_checks = 1.0e30  # a ridiculously large number
+        self.max_mb_checks = max_mb_checks
+        self.do_data_checks = self.max_mb_checks > 0
         if ignore_codes is None:
             ignore_codes = []
         self.ignore_codes = ignore_codes
@@ -292,9 +296,9 @@ class Checker:
             check_attr_mismatch("units")
 
             # Do the data-values check.  This is potentially costly.
-            if self.do_data_checks:
-                # TODO: enable data-value checks by attaching lazy data arrays
-                # to scan variables.
+            # if self.do_data_checks:
+            # this one is still tricky
+            if 0:
                 assert bounds_var.data is not None
                 raise ValueError("Not ready for data-value checks.")
                 log_bounds_statement("A205", "???")
@@ -397,6 +401,9 @@ class Checker:
         conn_name = conn_var.name
         self._allowed_cfrole_varnames.append(conn_name)
 
+        # Create a handler object for any data checks.
+        conn_dataprops = VariableDataProperties(conn_var, self.max_mb_checks)
+
         if meshvar:
             msg_prefix = f'of mesh "{meshvar.name}" '
         else:
@@ -441,6 +448,10 @@ class Checker:
             )
             log_conn("R304", msg)
 
+        # dimension name of the relevant dim.
+        # This is set only if successfully identified
+        parent_dim = None
+
         if meshvar:
             # Check dims : can only be checked against a parent mesh
             mesh_dims = self._all_mesh_dims[meshvar.name]
@@ -470,6 +481,7 @@ class Checker:
                         f'"{parent_dim}".'
                     )
                     log_conn("R307", msg)
+                    parent_dim = None  # disable use when not valid
 
             edgelike_conns = (
                 "edge_node_connectivity",
@@ -491,6 +503,7 @@ class Checker:
                     )
                     log_conn("R308", msg)
 
+        index_offset = 0
         index_value = conn_var.attributes.get("start_index")
         if index_value is not None:
             # Note: check value, converted to int.
@@ -502,11 +515,15 @@ class Checker:
                     "either 0 or 1."
                 )
                 log_conn("R309", msg)
+            else:
+                index_offset = index_value
 
-        if role_name and self.do_data_checks:
-            if role_name.endswith("_node_connectivity"):
-                # Check for missing values
-                msg = "may have missing indices (NOT YET CHECKED)."
+        if role_name.endswith("_node_connectivity"):
+            if conn_dataprops.has_missing_values:
+                msg = (
+                    "contains missing indices, which is not permitted for "
+                    f'a connectivity of type "{role_name}".'
+                )
                 log_conn("R310", msg)
 
         #
@@ -532,42 +549,58 @@ class Checker:
             log_conn("A303", msg)
 
         fill_value = conn_var.attributes.get("_FillValue")
-        if (
-            role_name
-            and role_name
-            in ("boundary_node_connectivity", "edge_node_connectivity")
-            and fill_value is not None
-        ):
+        if fill_value is None:
+            # No fill value : check there are *no* missing indices.
+            if conn_dataprops.has_missing_values:
+                msg = (
+                    "contains missing indices, "
+                    "but has no '_FillValue' attribute."
+                )
+                log_conn("A305", msg)
+        else:
+            if role_name and role_name in (
+                "boundary_node_connectivity",
+                "edge_node_connectivity",
+            ):
+                msg = (
+                    f"has a '_FillValue' attribute, which should not be present "
+                    f'on a "{role_name}" connectivity.'
+                )
+                log_conn("A304", msg)
+
+            if fill_value.dtype != conn_var.dtype:
+                msg = (
+                    f"has a '_FillValue' of type \"{fill_value.dtype}\", "
+                    "which is different from the variable type, "
+                    f'"{conn_var.dtype}".'
+                )
+                log_conn("A306", msg)
+
+            if fill_value >= 0:
+                msg = f'has _FillValue="{fill_value}", which is not negative.'
+                log_conn("A307", msg)
+
+        min_ind = conn_dataprops.min_index
+        if min_ind < index_offset:
             msg = (
-                f"has a '_FillValue' attribute, which should not be present "
-                f'on a "{role_name}" connectivity.'
-            )
-            log_conn("A304", msg)
-
-        if self.do_data_checks:
-            # check for missing indices
-            msg = "may have missing indices (NOT YET CHECKED)."
-            log_conn("A305", msg)
-
-        if fill_value is not None and fill_value.dtype != conn_var.dtype:
-            msg = (
-                f"has a '_FillValue' of type \"{fill_value.dtype}\", "
-                "which is different from the variable type, "
-                f'"{conn_var.dtype}".'
-            )
-            log_conn("A306", msg)
-
-        if fill_value is not None and fill_value >= 0:
-            msg = f'has _FillValue="{fill_value}", which is not negative.'
-            log_conn("A307", msg)
-
-        if meshvar and self.do_data_checks:
-            # check for missing indices
-            msg = (
-                "may have indices which exceed the length of the element "
-                "dimension (NOT YET CHECKED)."
+                f"has some index value = {min_ind}, "
+                f"which is less than the 'start_index' of {index_value}."
             )
             log_conn("A308", msg)
+
+        if meshvar:
+            location = role_name.split("_")[1]  # the 'target' role
+            parent_dim = mesh_dims[location]
+            dim = self.file_scan.dimensions.get(parent_dim)
+            if dim:
+                max_ind = conn_dataprops.max_index - index_offset
+                if max_ind >= dim.length:
+                    msg = (
+                        f"has some index value = {max_ind}, "
+                        "which is greater than the length of the relevant "
+                        f'"{parent_dim}" dimension, {dim.length}.'
+                    )
+                    log_conn("A308", msg)
 
     def check_mesh_connectivity(
         self,
@@ -1064,6 +1097,8 @@ class Checker:
         def log_lis(errcode, msg):
             self.state(errcode, "location-index-set", lis_var.name, msg)
 
+        lisvar_dataprops = VariableDataProperties(lis_var, self.max_mb_checks)
+
         cf_role = lis_var.attributes.get("cf_role")
         if cf_role is None:
             log_lis("R401", "has no 'cf_role' attribute.")
@@ -1123,6 +1158,7 @@ class Checker:
         else:
             (lis_dim,) = lis_dims
 
+        index_offset = 0
         index_value = lis_var.attributes.get("start_index")
         if index_value is not None:
             # Note: check value, converted to int.
@@ -1134,6 +1170,16 @@ class Checker:
                     "either 0 or 1."
                 )
                 log_lis("R406", msg)
+            else:
+                index_offset = index_value
+
+            if index_value.dtype != lis_var.dtype:
+                msg = (
+                    f"has a 'start_index' of type \"{index_value.dtype}\", "
+                    "which is different from the variable type, "
+                    f'"{lis_var.dtype}".'
+                )
+                log_lis("A407", msg)
 
         #
         # Advisory checks
@@ -1142,9 +1188,12 @@ class Checker:
             msg = f'has type "{lis_var.dtype}", which is not an integer type.'
             log_lis("A401", msg)
 
-        if self.do_data_checks:
-            # TODO: data checks
-            log_lis("A402", "contains missing indices.")
+        if lisvar_dataprops.has_missing_values:
+            msg = (
+                "contains 'missing' index values, which should not be present "
+                "in a location-index-set."
+            )
+            log_lis("A402", msg)
 
         if "_FillValue" in lis_var.attributes:
             msg = (
@@ -1165,29 +1214,32 @@ class Checker:
                 )
                 log_lis("A404", msg)
 
-        if self.do_data_checks:
-            # TODO: data checks
-            msg = "contains repeated index values."
-            log_lis(
-                "A405",
-            )
-            if mesh_var:
-                msg = (
-                    "contains index values which are outside the range of the "
-                    f'parent mesh "{mesh_name}" {location} dimension, '
-                    f' : "{parent_dim}", range 1..{len_parent}.'
-                )
-                log_lis(
-                    "A406",
-                )
-
-        if index_value is not None and index_value.dtype != lis_var.dtype:
+        if lisvar_dataprops.has_duplicate_values:
             msg = (
-                f"has a 'start_index' of type \"{index_value.dtype}\", "
-                "which is different from the variable type, "
-                f'"{lis_var.dtype}".'
+                "contains repeated index values, which should not be present "
+                "in a location-index-set."
             )
-            log_lis("A407", msg)
+            log_lis("A405", msg)
+
+        min_ind = lisvar_dataprops.min_index
+        if min_ind < index_offset:
+            msg = (
+                f"has some index value = {min_ind}, "
+                f"which is less than the start-index value of {index_offset}."
+            )
+            log_lis("A406", msg)
+
+        if parent_dim:
+            dim = self.file_scan.dimensions.get(parent_dim)
+            if dim:
+                max_ind = lisvar_dataprops.max_index - index_offset
+                if max_ind >= dim.length:
+                    msg = (
+                        f"has some index value = {max_ind}, "
+                        "which is greater than the length of the relevant "
+                        f'"{parent_dim}" dimension, {dim.length}.'
+                    )
+                    log_lis("A406", msg)
 
     def dataset_identify_containers(self):
         """
@@ -1779,6 +1831,7 @@ def check_dataset(
     print_summary: bool = True,
     omit_advisories: bool = False,
     ignore_codes: Union[List[str], None] = None,
+    max_data_mb: float = 0.0,
 ) -> Checker:
     """
     Run UGRID conformance checks on a file.
@@ -1798,6 +1851,10 @@ def check_dataset(
         advisory 'Axxx' ones.
     ignore_codes : list(str) or None, default None
         A list of error codes to ignore.
+    max_data_mb : float, default 0.0
+        A size threshold, beyond which we will skip data checks.
+        Default is 0 = no data checks.
+        Can also set to -1 for "accept any"
 
     Returns
     -------
