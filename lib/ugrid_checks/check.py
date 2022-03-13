@@ -224,7 +224,12 @@ class Checker:
             result = ""
         return result
 
-    def check_coord_bounds(self, coord: NcVariableSummary) -> List[Tuple[str]]:
+    def check_coord_bounds(
+        self,
+        coord: NcVariableSummary,
+        meshvar: NcVariableSummary,
+        location: str,
+    ) -> List[Tuple[str]]:
         """
         Validity-check the bounds of a coordinate (if any).
 
@@ -295,27 +300,111 @@ class Checker:
             check_attr_mismatch("standard_name")
             check_attr_mismatch("units")
 
-            # Do the data-values check.  This is potentially costly.
-            # if self.do_data_checks:
-            # this one is still tricky
-            if 0:
-                assert bounds_var.data is not None
-                raise ValueError("Not ready for data-value checks.")
-                log_bounds_statement("A205", "???")
+            if location == "node":
+                msg = (
+                    "has a 'bounds' attribute, which is not valid for a "
+                    "coordinate of 'node' location."
+                )
+                log_bounds_statement("R299", msg)
+            else:
+                # Do the data-values check.  This is potentially costly.
+                # Check the bounds against those *calculated* from the relevant
+                # connectivity + node coordinates.
+                assert location in ("edge", "face")
+
+                # Find the relevant (required) connectivity var
+                connvar_name = meshvar.attributes.get(
+                    f"{location}_node_connectivity"
+                )
+                connvar = self._all_vars.get(connvar_name)
+
+                if connvar:
+                    # Check the shapes match as expected.
+                    if bounds_var.shape != connvar.shape:
+                        msg = (
+                            f"has shape {bounds_var.shape}, which does not "
+                            f"match the shape {connvar.shape} of the "
+                            f'{location} connectivity, "{connvar.name}".'
+                        )
+                        log_bounds_statement("A205", msg)
+                        connvar = None  # Abandon the subsequent checks
+
+                # Find a node coord with stdname + units matching this coord
+                # NOTE: node_coord=None is used to abort further calculation
+                node_coord = None
+                coord_stdname = coord.attributes.get("standard_name")
+                if connvar and coord_stdname:
+                    # Find the matching node coordinate
+                    # N.B. we need a std-name, but can tolerate missing units
+                    coord_units = coord.attributes.get("units")
+                    node_coord_names = property_namelist(
+                        meshvar.attributes.get("node_coordinates")
+                    )
+                    for node_coord_name in node_coord_names:
+                        var = self._all_vars.get(node_coord_name)
+                        if not var:
+                            continue
+                        stdname = var.attributes.get("standard_name") or ""
+                        if stdname != coord_stdname:
+                            continue
+                        if coord_units:
+                            units = var.attributes.get("units") or ""
+                            if units != coord_units:
+                                continue
+                        # ELSE: this is the one wanted
+                        node_coord = var
+                        break
+
+                if node_coord:
+                    # Fetch the connectivity and node-coord data arrays
+                    size_lim = self.max_mb_checks * 0.33
+                    conn_nodeinds = VariableDataProperties(
+                        connvar.data, size_lim
+                    ).get_data()
+                    node_coordvals = VariableDataProperties(
+                        node_coord.data, size_lim
+                    ).get_data()
+                    if conn_nodeinds is None or node_coordvals is None:
+                        # disable if too costly (arrays did not load).
+                        node_coord = None
+
+                if node_coord:
+                    # Construct calculated  bounds.
+                    # A potentially costly 'fancy indexing' calculation
+                    expected_coord_bounds = node_coordvals[conn_nodeinds]
+                    # discard component arrays, which might reduce memory
+                    conn_nodeinds = None
+                    node_coordvals = None
+
+                    # Fetch the bounds-variable data
+                    bounds_data = VariableDataProperties(
+                        bounds_var, size_lim
+                    ).get_data()
+                    if bounds_data is None:
+                        node_coord = None
+
+                if node_coord:
+                    # Compare bounds data against calculation
+                    # - a potentially an even-more-costly calculation (!)
+                    if not np.allclose(expected_coord_bounds == bounds_data):
+                        msg = (
+                            f"does not match the expected values "
+                            f'calculated from the "{node_coord.name}" '
+                            f"node coordinate and the {location} "
+                            f'connectivity, "{connvar.name}".'
+                        )
+                        log_bounds_statement("A205", msg)
 
         return result_codes_and_messages
 
-    def check_mesh_coordinates(
+    def check_coordinate(
         self,
+        coord: NcVariableSummary,
         meshvar: NcVariableSummary,
-        attr_name: str,
+        location: str,
     ):
-        """Validity-check a coordinate attribute of a mesh-variable."""
-        # Note: the content of the coords attribute was already checked
-
-        # Elements which change as we scan the various coords.
-        coord = None
-        common_msg_prefix = ""
+        """Validity-check a coordinate of a mesh."""
+        common_msg_prefix = f"within {meshvar.name}:{location}_coordinates "
 
         # Function to emit a statement message, adding context as to the
         # specific coord variable.
@@ -324,64 +413,58 @@ class Checker:
                 code, "Mesh coordinate", coord.name, common_msg_prefix + msg
             )
 
-        coord_names = property_namelist(meshvar.attributes.get(attr_name))
-        for coord_name in coord_names:
-            if coord_name not in self._all_vars:
-                # This problem will already have been detected + logged.
-                continue
-            coord = self._all_vars[coord_name]
-            common_msg_prefix = f"within {meshvar.name}:{attr_name} "
-            coord_ndims = len(coord.dimensions)
-            if coord_ndims != 1:
+        coord_ndims = len(coord.dimensions)
+        if coord_ndims != 1:
+            msg = (
+                f"should have exactly one dimension, but has "
+                f"{coord_ndims} dimensions : {coord.dimensions!r}."
+            )
+            log_coord("R201", msg)
+        else:
+            # Check the dimension is the correct one according to location.
+            (coord_dim,) = coord.dimensions
+            mesh_dim = self._all_mesh_dims[meshvar.name][location]
+            if coord_dim != mesh_dim:
                 msg = (
-                    f"should have exactly one dimension, but has "
-                    f"{coord_ndims} dimensions : {coord.dimensions!r}."
+                    f'has dimension "{coord_dim}", but the parent mesh '
+                    f'{location} dimension is "{mesh_dim}".'
                 )
-                log_coord("R201", msg)
-            else:
-                # Check the dimension is the correct one according to location.
-                (coord_dim,) = coord.dimensions
-                location = attr_name.split("_")[0]
-                mesh_dim = self._all_mesh_dims[meshvar.name][location]
-                if coord_dim != mesh_dim:
-                    msg = (
-                        f'has dimension "{coord_dim}", but the parent mesh '
-                        f'{location} dimension is "{mesh_dim}".'
-                    )
-                    log_coord("R202", msg)
-                # Check coord bounds (if any)
-                # N.B. this *also* assumes a single dim for the primary var
-                codes_and_messages = self.check_coord_bounds(coord)
-                for code, msg in codes_and_messages:
-                    log_coord(code, msg)
+                log_coord("R202", msg)
+            # Check coord bounds (if any)
+            # N.B. this *also* assumes a single dim for the primary var
+            codes_and_messages = self.check_coord_bounds(
+                coord, meshvar, location
+            )
+            for code, msg in codes_and_messages:
+                log_coord(code, msg)
 
-            #
-            # Advisory notes..
-            #
+        #
+        # Advisory notes..
+        #
 
-            # A201 should have 1-and-only-1 parent mesh : this is handled by
-            # 'check_dataset', as it involves multiple meshes.
+        # A201 should have 1-and-only-1 parent mesh : this is handled by
+        # 'check_dataset', as it involves multiple meshes.
 
-            # A202 floating-point type
-            dtype = coord.dtype
-            if dtype.kind != "f":
-                log_coord(
-                    "A202",
-                    f'has type "{dtype}", which is not a floating-point type.',
-                )
+        # A202 floating-point type
+        dtype = coord.dtype
+        if dtype.kind != "f":
+            log_coord(
+                "A202",
+                f'has type "{dtype}", which is not a floating-point type.',
+            )
 
-            # A203 standard-name : has+valid (can't handle fully ??)
-            stdname = coord.attributes.get("standard_name")
-            if not stdname:
-                log_coord("A203", "has no 'standard_name' attribute.")
+        # A203 standard-name : has+valid (can't handle fully ??)
+        stdname = coord.attributes.get("standard_name")
+        if not stdname:
+            log_coord("A203", "has no 'standard_name' attribute.")
 
-            # A204 units : has+valid (can't handle fully ??)
-            stdname = coord.attributes.get("units")
-            if not stdname:
-                log_coord("A204", "has no 'units' attribute.")
+        # A204 units : has+valid (can't handle fully ??)
+        stdname = coord.attributes.get("units")
+        if not stdname:
+            log_coord("A204", "has no 'units' attribute.")
 
-            # A205 bounds data values match derived ones
-            # - did this already above, within "check_coord_bounds"
+        # A205 bounds data values match derived ones
+        # - did this already above, within "check_coord_bounds"
 
     def check_connectivity(
         self,
@@ -884,13 +967,20 @@ class Checker:
             log_meshvar(errcode, msg)
 
         # Check that all existing coordinates are valid.
-        for coords_name in _VALID_MESHCOORD_ATTRS:
-            location = coords_name.split("_")[0]
+        for coords_attr in _VALID_MESHCOORD_ATTRS:
+            location = coords_attr.split("_")[0]
             # Only check coords of locations present in the mesh.
             # This avoids complaints about coords dis-connected by problems
             # with the topology identification.
             if mesh_dims[location]:
-                self.check_mesh_coordinates(meshvar, coords_name)
+                coord_names = property_namelist(
+                    meshvar.attributes.get(coords_attr)
+                )
+                for coord_name in coord_names:
+                    coord = self._all_vars.get(coord_name)
+                    if coord:
+                        # If absent, that was already detected + logged.
+                        self.check_coordinate(coord, meshvar, location)
 
         # Check that all existing connectivities are valid.
         for attr in _VALID_CONNECTIVITY_ROLES:
