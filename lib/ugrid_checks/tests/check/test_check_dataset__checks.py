@@ -1112,22 +1112,24 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check(scan, "R203", msg)
 
-    def test_r203_coord_bounds_missing_element_dim(self, scan_2d_and_coordvar):
-        scan, coord = scan_2d_and_coordvar
-        # Add node-lon bounds, with inappropriate dims.
-        scan.dimensions["extra1"] = NcDimSummary(3)
-        scan.dimensions["extra2"] = NcDimSummary(2)
-        nodelon_bds_name = "node_lons_bounds"
-        scan.variables[nodelon_bds_name] = NcVariableSummary(
-            name=nodelon_bds_name,
+    def test_r203_coord_bounds_missing_element_dim(self, scan_2d_mesh):
+        scan = scan_2d_mesh
+        coord = scan.variables["longitude"]
+        # Add face-lon bounds, with inappropriate dims.
+        # N.B. match the expected dim *lengths*, to avoid additional errors
+        scan.dimensions["extra1"] = NcDimSummary(6)
+        scan.dimensions["extra2"] = NcDimSummary(4)
+        facelon_bds_name = "node_lons_bounds"
+        scan.variables[facelon_bds_name] = NcVariableSummary(
+            name=facelon_bds_name,
             dimensions=("extra1", "extra2"),
-            shape=(3, 2),
+            shape=(6, 4),
             dtype=coord.dtype,
         )
-        coord.attributes["bounds"] = nodelon_bds_name
+        coord.attributes["bounds"] = facelon_bds_name
         msg = (
             r"dimensions \('extra1', 'extra2'\).*"
-            'does not include the parent variable dimension, "num_node".'
+            'does not include the parent variable dimension, "face_dim".'
         )
         self.check(scan, "R203", msg)
 
@@ -1143,7 +1145,14 @@ class TestChecker_Coords(DatasetChecker):
         )
         coord.attributes["bounds"] = facelons_bds_name
         msg = r"dimensions \('face_dim',\).* should be 2, instead of 1\."
-        self.check(scan_2d_mesh, "R203", msg)
+        self.check(
+            scan_2d_mesh,
+            statements=[
+                ("R203", msg),
+                # N.B. can't help getting this one too
+                ("A205", "does not match the shape"),
+            ],
+        )
 
     def test_r203_coord_bounds_stdname_clash(self, scan_2d_mesh):
         coord = scan_2d_mesh.variables["longitude"]
@@ -1152,7 +1161,7 @@ class TestChecker_Coords(DatasetChecker):
         scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
             name=facelons_bds_name,
             dimensions=("face_dim", "num_vertices"),
-            shape=(6,),
+            shape=(6, 4),
             dtype=coord.dtype,
             attributes={"standard_name": "junk"},
         )
@@ -1170,7 +1179,7 @@ class TestChecker_Coords(DatasetChecker):
         scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
             name=facelons_bds_name,
             dimensions=("face_dim", "num_vertices"),
-            shape=(6,),
+            shape=(6, 4),
             dtype=coord.dtype,
             attributes={"standard_name": coord.attributes["standard_name"]},
         )
@@ -1195,7 +1204,7 @@ class TestChecker_Coords(DatasetChecker):
         scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
             name=facelons_bds_name,
             dimensions=("face_dim", "num_vertices"),
-            shape=(6,),
+            shape=(6, 4),
             dtype=coord.dtype,
             attributes={"units": "junk"},
         )
@@ -1213,7 +1222,7 @@ class TestChecker_Coords(DatasetChecker):
         scan_2d_mesh.variables[facelons_bds_name] = NcVariableSummary(
             name=facelons_bds_name,
             dimensions=("face_dim", "num_vertices"),
-            shape=(6,),
+            shape=(6, 4),
             dtype=coord.dtype,
             attributes={"units": "degrees_east"},
         )

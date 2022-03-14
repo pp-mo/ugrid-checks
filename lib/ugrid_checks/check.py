@@ -313,8 +313,8 @@ class Checker:
                 assert location in ("edge", "face")
 
                 # Find the relevant (required) connectivity var
-                connvar_name = meshvar.attributes.get(
-                    f"{location}_node_connectivity"
+                connvar_name = property_as_single_name(
+                    meshvar.attributes.get(f"{location}_node_connectivity")
                 )
                 connvar = self._all_vars.get(connvar_name)
 
@@ -359,10 +359,10 @@ class Checker:
                     # Fetch the connectivity and node-coord data arrays
                     size_lim = self.max_mb_checks * 0.33
                     conn_nodeinds = VariableDataProperties(
-                        connvar.data, size_lim
+                        connvar, size_lim
                     ).get_data()
                     node_coordvals = VariableDataProperties(
-                        node_coord.data, size_lim
+                        node_coord, size_lim
                     ).get_data()
                     if conn_nodeinds is None or node_coordvals is None:
                         # disable if too costly (arrays did not load).
