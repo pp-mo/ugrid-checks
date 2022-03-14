@@ -32,10 +32,10 @@ class VariableDataProxy:
         return result
 
 
-class VariableDataProperties:
+class VariableDataStats:
     def __init__(self, var: NcVariableSummary, max_datasize_mb: float = -1.0):
         """
-        An object to efficiently calculate key properties of a variables' data.
+        An object to efficiently calculate key statistics of a variables' data.
 
         Parameters
         ----------
@@ -51,27 +51,30 @@ class VariableDataProperties:
         Actual calculations are deferred, in addition to returning the "safe"
         values without calculation if the variable exceeds the size threshold.
 
-        The independent 'key properties' of the data are independently
-        calculated, and the results cached.
+        The 'key statistics' of the data are calculated independently on demand,
+        and the results cached.
 
         When var data is fetched, it is cached in this object.
-        This is discarded on request, or when the last of the key properties is
+        This is discarded on request, or when all the key statistics have been
         calculated.
 
         """
         if max_datasize_mb < 0:
             max_datasize_mb = 1.0e30  # stupidly large
+        # Public state
         self.max_datasize = max_datasize_mb
+        self.has_data = False  # public version of "self._data is not None"
         self.var = var
+        # Private state
         self._data = None
         self._decide_data_fetch = True  # We only do it once.
 
-        # Set an empty cache of value defaults for each key property.
+        # Create an empty cache = value defaults for each key statistic.
         self._cached_values = {
             "has_missing_values": None,
             "has_duplicate_values": None,
-            "min_index": None,
-            "max_index": None,
+            "min_value": None,
+            "max_value": None,
         }
 
     def get_data(self) -> np.ndarray:
@@ -79,19 +82,20 @@ class VariableDataProperties:
         Get the var data, if the var is not too large.
 
         Returns the array, or None.
-        If present, the data is cached.
+        When loaded, the data is cached ==> "self.has_data == True".
 
         """
         if self._decide_data_fetch:
             self._decide_data_fetch = False
             if self.var:
-                # Decide whether to fetch data, and record it in self._data.
+                # Decide *whether* to fetch data, and record it in self._data.
+                # If not, self._data == None, and will stay that way.
                 var_size_mb = (
                     np.prod(self.var.shape) * self.var.dtype.itemsize * 1.0e-6
                 )
                 if var_size_mb < self.max_datasize:
                     self._data = self.var.fetch_array()
-            # "otherwise" self._data == None, and will stay that way.
+                    self.has_data = True
         return self._data
 
     def discard_data(self):
@@ -103,10 +107,11 @@ class VariableDataProperties:
 
         """
         self._data = None
+        self.has_data = False
 
-    def fetch_all_properties(self):
+    def get_all_stats(self):
         """
-        Calculate all properties : this will also discard the cached data.
+        Calculate all the statistics : this also discards the cached data.
 
         """
         for name in self._cached_values.keys():
@@ -118,7 +123,7 @@ class VariableDataProperties:
 
     @property
     def has_missing_values(self) -> bool:
-        """Whether the var has any missing data values."""
+        """Whether the var has any missing data values (or default=False)."""
         if self._cached_values["has_missing_values"] is None:
             data = self.get_data()
             if data is None:
@@ -131,7 +136,7 @@ class VariableDataProperties:
 
     @property
     def has_duplicate_values(self) -> bool:
-        """Whether the var has any missing data values."""
+        """Whether the var has any duplicate data values (or default=False)."""
         if self._cached_values["has_duplicate_values"] is None:
             data = self.get_data()
             if data is None:
@@ -143,27 +148,27 @@ class VariableDataProperties:
         return self._cached_values["has_duplicate_values"]
 
     @property
-    def min_index(self):
-        """Whether the var has any missing data values."""
-        if self._cached_values["min_index"] is None:
+    def min_value(self):
+        """The minimum (un-masked) value in the var (or default=1)."""
+        if self._cached_values["min_value"] is None:
             data = self.get_data()
             if data is None:
                 min_index = 1  # "Safe" answer
             else:
                 min_index = data.min()  # also works if masked
-            self._cached_values["min_index"] = min_index
+            self._cached_values["min_value"] = min_index
             self._discard_data_if_alldone()
-        return self._cached_values["min_index"]
+        return self._cached_values["min_value"]
 
     @property
-    def max_index(self):
-        """Whether the var has any missing data values."""
-        if self._cached_values["max_index"] is None:
+    def max_value(self):
+        """The maximum (un-masked) value in the var (or default=1)."""
+        if self._cached_values["max_value"] is None:
             data = self.get_data()
             if data is None:
                 max_index = 1  # "Safe" answer
             else:
                 max_index = data.max()  # also works if masked
-            self._cached_values["max_index"] = max_index
+            self._cached_values["max_value"] = max_index
             self._discard_data_if_alldone()
-        return self._cached_values["max_index"]
+        return self._cached_values["max_value"]

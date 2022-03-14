@@ -4,7 +4,7 @@ from typing import AnyStr, Dict, List, Mapping, Text, Tuple, Union
 
 import numpy as np
 
-from ._var_data import VariableDataProperties
+from ._var_data import VariableDataStats
 from .nc_dataset_scan import (
     NcDimSummary,
     NcFileSummary,
@@ -358,10 +358,10 @@ class Checker:
                 if node_coord:
                     # Fetch the connectivity and node-coord data arrays
                     size_lim = self.max_mb_checks * 0.33
-                    conn_nodeinds = VariableDataProperties(
+                    conn_nodeinds = VariableDataStats(
                         connvar, size_lim
                     ).get_data()
-                    node_coordvals = VariableDataProperties(
+                    node_coordvals = VariableDataStats(
                         node_coord, size_lim
                     ).get_data()
                     if conn_nodeinds is None or node_coordvals is None:
@@ -377,7 +377,7 @@ class Checker:
                     node_coordvals = None
 
                     # Fetch the bounds-variable data
-                    bounds_data = VariableDataProperties(
+                    bounds_data = VariableDataStats(
                         bounds_var, size_lim
                     ).get_data()
                     if bounds_data is None:
@@ -385,7 +385,7 @@ class Checker:
 
                 if node_coord:
                     # Compare bounds data against calculation
-                    # - a potentially an even-more-costly calculation (!)
+                    # - a potentially even-more-costly calculation (!)
                     if not np.allclose(expected_coord_bounds == bounds_data):
                         msg = (
                             f"does not match the expected values "
@@ -485,7 +485,7 @@ class Checker:
         self._allowed_cfrole_varnames.append(conn_name)
 
         # Create a handler object for any data checks.
-        conn_dataprops = VariableDataProperties(conn_var, self.max_mb_checks)
+        conn_stats = VariableDataStats(conn_var, self.max_mb_checks)
 
         if meshvar:
             msg_prefix = f'of mesh "{meshvar.name}" '
@@ -602,7 +602,7 @@ class Checker:
                 index_offset = index_value
 
         if role_name.endswith("_node_connectivity"):
-            if conn_dataprops.has_missing_values:
+            if conn_stats.has_missing_values:
                 msg = (
                     "contains missing indices, which is not permitted for "
                     f'a connectivity of type "{role_name}".'
@@ -634,7 +634,7 @@ class Checker:
         fill_value = conn_var.attributes.get("_FillValue")
         if fill_value is None:
             # No fill value : check there are *no* missing indices.
-            if conn_dataprops.has_missing_values:
+            if conn_stats.has_missing_values:
                 msg = (
                     "contains missing indices, "
                     "but has no '_FillValue' attribute."
@@ -663,7 +663,7 @@ class Checker:
                 msg = f'has _FillValue="{fill_value}", which is not negative.'
                 log_conn("A307", msg)
 
-        min_ind = conn_dataprops.min_index
+        min_ind = conn_stats.min_value
         if min_ind < index_offset:
             msg = (
                 f"has some index value = {min_ind}, "
@@ -676,7 +676,7 @@ class Checker:
             parent_dim = mesh_dims[location]
             dim = self.file_scan.dimensions.get(parent_dim)
             if dim:
-                max_ind = conn_dataprops.max_index - index_offset
+                max_ind = conn_stats.max_value - index_offset
                 if max_ind >= dim.length:
                     msg = (
                         f"has some index value = {max_ind}, "
@@ -1187,7 +1187,7 @@ class Checker:
         def log_lis(errcode, msg):
             self.state(errcode, "location-index-set", lis_var.name, msg)
 
-        lisvar_dataprops = VariableDataProperties(lis_var, self.max_mb_checks)
+        lisvar_stats = VariableDataStats(lis_var, self.max_mb_checks)
 
         cf_role = lis_var.attributes.get("cf_role")
         if cf_role is None:
@@ -1278,7 +1278,7 @@ class Checker:
             msg = f'has type "{lis_var.dtype}", which is not an integer type.'
             log_lis("A401", msg)
 
-        if lisvar_dataprops.has_missing_values:
+        if lisvar_stats.has_missing_values:
             msg = (
                 "contains 'missing' index values, which should not be present "
                 "in a location-index-set."
@@ -1304,14 +1304,14 @@ class Checker:
                 )
                 log_lis("A404", msg)
 
-        if lisvar_dataprops.has_duplicate_values:
+        if lisvar_stats.has_duplicate_values:
             msg = (
                 "contains repeated index values, which should not be present "
                 "in a location-index-set."
             )
             log_lis("A405", msg)
 
-        min_ind = lisvar_dataprops.min_index
+        min_ind = lisvar_stats.min_value
         if min_ind < index_offset:
             msg = (
                 f"has some index value = {min_ind}, "
@@ -1322,7 +1322,7 @@ class Checker:
         if parent_dim:
             dim = self.file_scan.dimensions.get(parent_dim)
             if dim:
-                max_ind = lisvar_dataprops.max_index - index_offset
+                max_ind = lisvar_stats.max_value - index_offset
                 if max_ind >= dim.length:
                     msg = (
                         f"has some index value = {max_ind}, "
