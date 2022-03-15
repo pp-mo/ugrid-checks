@@ -107,8 +107,13 @@ class Checker:
         self._all_mesh_dims: Dict[str, Dict[str, Union[None, str]]] = {}
         self._allowed_cfrole_varnames: List[str]
         self._orphan_connectivities: Dict[str, NcVariableSummary] = {}
+        self.data_skipped = False
         # Initialise
         self.check_dataset()
+
+    def _data_skipped_event(self):
+        # Register that, during data-checks, some data was too large.
+        self.data_skipped = True
 
     def state(self, errcode: str, vartype: str, varname: str, msg: str):
         """
@@ -358,14 +363,14 @@ class Checker:
                     # Fetch the connectivity and node-coord data arrays
                     size_lim = self.max_mb_checks * 0.33
                     conn_nodeinds = VariableDataStats(
-                        connvar, size_lim
+                        connvar, size_lim, self._data_skipped_event
                     ).get_data()
                     if conn_nodeinds is not None:
                         # Adjust for start-index
                         start_index = connvar.attributes.get("start_index", 0)
                         conn_nodeinds -= start_index
                     node_coordvals = VariableDataStats(
-                        node_coord, size_lim
+                        node_coord, size_lim, self._data_skipped_event
                     ).get_data()
                     if conn_nodeinds is None or node_coordvals is None:
                         # disable if too costly (arrays did not load).
@@ -389,7 +394,7 @@ class Checker:
 
                     # Fetch the bounds-variable data
                     bounds_data = VariableDataStats(
-                        bounds_var, size_lim
+                        bounds_var, size_lim, self._data_skipped_event
                     ).get_data()
                     if bounds_data is None:
                         node_coord = None
@@ -496,7 +501,9 @@ class Checker:
         self._allowed_cfrole_varnames.append(conn_name)
 
         # Create a handler object for any data checks.
-        conn_stats = VariableDataStats(conn_var, self.max_mb_checks)
+        conn_stats = VariableDataStats(
+            conn_var, self.max_mb_checks, self._data_skipped_event
+        )
 
         if meshvar:
             msg_prefix = f'of mesh "{meshvar.name}" '
@@ -1216,7 +1223,9 @@ class Checker:
         def log_lis(errcode, msg):
             self.state(errcode, "location-index-set", lis_var.name, msg)
 
-        lisvar_stats = VariableDataStats(lis_var, self.max_mb_checks)
+        lisvar_stats = VariableDataStats(
+            lis_var, self.max_mb_checks, self._data_skipped_event
+        )
 
         cf_role = lis_var.attributes.get("cf_role")
         if cf_role is None:
@@ -1669,6 +1678,12 @@ class Checker:
         line("")
         line("UGRID conformance checks complete.")
         line("")
+        if self.data_skipped:
+            line(
+                "WARNING: Some data checks skipped, "
+                f"due to arrays larger than {self.max_mb_checks} Mb."
+            )
+            line("")
         if log.N_FAILURES + log.N_WARNINGS == 0:
             line("No problems found.")
         else:
@@ -1951,7 +1966,7 @@ def check_dataset(
     print_summary: bool = True,
     omit_advisories: bool = False,
     ignore_codes: Union[List[str], None] = None,
-    max_data_mb: float = 0.0,
+    max_data_mb: float = 200.0,
 ) -> Checker:
     """
     Run UGRID conformance checks on a file.

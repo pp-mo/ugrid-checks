@@ -52,6 +52,16 @@ def make_parser():
         action="store_true",
         help="print version information",
     )
+    parser.add_argument(
+        "-d",
+        "--max-datasize",
+        type=float,
+        default=200.0,
+        help=(
+            "maximum array-size (Mb), "
+            "above which variable-data checks are skipped."
+        ),
+    )
     return parser
 
 
@@ -92,6 +102,7 @@ def call_cli(args=None):
         print_summary=False,  # print summary separately, if needed
         omit_advisories=args.errorsonly,
         ignore_codes=ignore_codes,
+        max_data_mb=args.max_datasize,
     )
 
     if args.summary:
@@ -104,10 +115,12 @@ def call_cli(args=None):
     rc = 0
     log = checker.logger
     if log.N_FAILURES > 0:
-        rc = 1
+        rc = 4
     if not args.errorsonly:
         if log.N_WARNINGS > 0:
-            rc = 1
+            rc |= 2
+    if checker.data_skipped:
+        rc |= 1
 
     if rc != 0 or not args.quiet:
         print(checker.checking_report())

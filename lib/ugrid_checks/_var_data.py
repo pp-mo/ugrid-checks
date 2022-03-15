@@ -12,6 +12,8 @@ the default is poorly suited), so let's not do that for now.
 For now instead, we fetch the *whole* variable data on demand.
 
 """
+from typing import Callable, Union
+
 import netCDF4 as nc
 import numpy as np
 
@@ -19,7 +21,7 @@ from .nc_dataset_scan import NcVariableSummary
 
 
 class VariableDataProxy:
-    def __init__(self, datapath, varname):
+    def __init__(self, datapath, varname, data_skipped_callback=None):
         self.datapath = datapath
         self.varname = varname
 
@@ -33,7 +35,12 @@ class VariableDataProxy:
 
 
 class VariableDataStats:
-    def __init__(self, var: NcVariableSummary, max_datasize_mb: float = -1.0):
+    def __init__(
+        self,
+        var: NcVariableSummary,
+        max_datasize_mb: float = -1.0,
+        data_skip_callback: Union[Callable, None] = None,
+    ):
         """
         An object to efficiently calculate key statistics of a variables' data.
 
@@ -68,6 +75,7 @@ class VariableDataStats:
         # Private state
         self._data = None
         self._decide_data_fetch = True  # We only do it once.
+        self._data_skipped_event = data_skip_callback
 
         # Create an empty cache = value defaults for each key statistic.
         self._cached_values = {
@@ -96,6 +104,8 @@ class VariableDataStats:
                 if var_size_mb < self.max_datasize:
                     self._data = self.var.data.fetch_array()
                     self.has_data = True
+                else:
+                    self._data_skipped_event()
         return self._data
 
     def discard_data(self):
