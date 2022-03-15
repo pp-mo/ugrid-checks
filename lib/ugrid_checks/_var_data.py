@@ -21,7 +21,14 @@ from .nc_dataset_scan import NcVariableSummary
 
 
 class VariableDataProxy:
-    def __init__(self, datapath, varname, data_skipped_callback=None):
+    """
+    Record details of a file variable, and provide deferred fetch of its data.
+
+    These are what is stored in a NcVariableSummary.data by file-scanning.
+
+    """
+
+    def __init__(self, datapath, varname):
         self.datapath = datapath
         self.varname = varname
 
@@ -39,10 +46,10 @@ class VariableDataStats:
         self,
         var: NcVariableSummary,
         max_datasize_mb: float = -1.0,
-        data_skip_callback: Union[Callable, None] = None,
+        data_skipped_callback: Union[Callable, None] = None,
     ):
         """
-        An object to efficiently calculate key statistics of a variables' data.
+        An object to efficiently calculate key statistics of a variable's data.
 
         Parameters
         ----------
@@ -51,33 +58,35 @@ class VariableDataStats:
             relevant VariableDataProxy, if there is one.
 
         max_datasize_mb : float, default -1.0
-            A size threshold, in Mb. If 'var' is bigger than this, then its
+            A size threshold, in Mb.  If 'var' is bigger than this, then its
             data will not be fetched, and all properties return 'safe' values.
             A value == 0 means never fetch, and < 0 means always fetch.
 
-        Actual calculations are deferred, in addition to returning the "safe"
-        values without calculation if the variable exceeds the size threshold.
+        data_skipped_callback: callable or None, default None
+            An argless function, to be called if the variable data was not
+            fetched on request, because it failed the size check.
+
+        When var data is fetched, it is cached in this object.
 
         The 'key statistics' of the data are calculated independently on demand,
         and the results cached.
-
-        When var data is fetched, it is cached in this object.
-        This is discarded on request, or when all the key statistics have been
-        calculated.
+        The statistic calculations are individually deferred, and the results
+        cached.  If the variable exceeded the size threshold, and was not
+        fetched, then all statistics return "safe" values instead.
 
         """
         if max_datasize_mb < 0:
             max_datasize_mb = 1.0e30  # stupidly large
         # Public state
+        self.var = var
         self.max_datasize = max_datasize_mb
         self.has_data = False  # public version of "self._data is not None"
-        self.var = var
         # Private state
         self._data = None
         self._decide_data_fetch = True  # We only do it once.
-        self._data_skipped_event = data_skip_callback
+        self._data_skipped_event = data_skipped_callback
 
-        # Create an empty cache = value defaults for each key statistic.
+        # Create an empty cache = values for each key statistic.
         self._cached_values = {
             "has_missing_values": None,
             "has_duplicate_values": None,
@@ -94,6 +103,7 @@ class VariableDataStats:
 
         """
         if self._decide_data_fetch:
+            # only decide this *once*.
             self._decide_data_fetch = False
             if self.var:
                 # Decide *whether* to fetch data, and record it in self._data.
@@ -105,31 +115,9 @@ class VariableDataStats:
                     self._data = self.var.data.fetch_array()
                     self.has_data = True
                 else:
-                    self._data_skipped_event()
+                    if self._data_skipped_event is not None:
+                        self._data_skipped_event()
         return self._data
-
-    def discard_data(self):
-        """
-        Remove the cached data values array.
-
-        This is done automatically when all the required properties have been
-        calculated.
-
-        """
-        self._data = None
-        self.has_data = False
-
-    def get_all_stats(self):
-        """
-        Calculate all the statistics : this also discards the cached data.
-
-        """
-        for name in self._cached_values.keys():
-            getattr(self, name)()  # Call each access routine.
-
-    def _discard_data_if_alldone(self):
-        if all(value is not None for value in self._cached_values.values()):
-            self.discard_data()
 
     @property
     def has_missing_values(self) -> bool:
@@ -141,7 +129,6 @@ class VariableDataStats:
             else:
                 has_missing = np.ma.is_masked(data)
             self._cached_values["has_missing_values"] = has_missing
-            self._discard_data_if_alldone()
         return self._cached_values["has_missing_values"]
 
     @property
@@ -161,7 +148,6 @@ class VariableDataStats:
                 n_distinct_values = len(set(data))
                 has_duplicates = n_distinct_values < n_data_values
             self._cached_values["has_duplicate_values"] = has_duplicates
-            self._discard_data_if_alldone()
         return self._cached_values["has_duplicate_values"]
 
     @property
@@ -174,7 +160,6 @@ class VariableDataStats:
             else:
                 min_index = data.min()  # also works if masked
             self._cached_values["min_value"] = min_index
-            self._discard_data_if_alldone()
         return self._cached_values["min_value"]
 
     @property
@@ -187,5 +172,4 @@ class VariableDataStats:
             else:
                 max_index = data.max()  # also works if masked
             self._cached_values["max_value"] = max_index
-            self._discard_data_if_alldone()
         return self._cached_values["max_value"]
