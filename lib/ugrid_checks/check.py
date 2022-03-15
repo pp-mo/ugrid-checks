@@ -91,7 +91,6 @@ class Checker:
         if max_mb_checks < 0:
             max_mb_checks = 1.0e30  # a ridiculously large number
         self.max_mb_checks = max_mb_checks
-        self.do_data_checks = self.max_mb_checks > 0
         if ignore_codes is None:
             ignore_codes = []
         self.ignore_codes = ignore_codes
@@ -531,10 +530,6 @@ class Checker:
             )
             log_conn("R304", msg)
 
-        # dimension name of the relevant dim.
-        # This is set only if successfully identified
-        parent_dim = None
-
         if meshvar:
             # Check dims : can only be checked against a parent mesh
             mesh_dims = self._all_mesh_dims[meshvar.name]
@@ -564,7 +559,6 @@ class Checker:
                         f'"{parent_dim}".'
                     )
                     log_conn("R307", msg)
-                    parent_dim = None  # disable use when not valid
 
             edgelike_conns = (
                 "edge_node_connectivity",
@@ -666,8 +660,8 @@ class Checker:
         min_ind = conn_stats.min_value
         if min_ind < index_offset:
             msg = (
-                f"has some index value = {min_ind}, "
-                f"which is less than the 'start_index' of {index_value}."
+                f"has a minimum index value of {min_ind}, "
+                f"which is less than its start-index of {index_value}."
             )
             log_conn("A308", msg)
 
@@ -679,7 +673,7 @@ class Checker:
                 max_ind = conn_stats.max_value - index_offset
                 if max_ind >= dim.length:
                     msg = (
-                        f"has some index value = {max_ind}, "
+                        f"has a maximum index value of {max_ind}, "
                         "which is greater than the length of the relevant "
                         f'"{parent_dim}" dimension, {dim.length}.'
                     )

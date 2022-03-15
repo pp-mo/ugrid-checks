@@ -46,7 +46,7 @@ class VariableDataStats:
         max_datasize_mb : float, default -1.0
             A size threshold, in Mb. If 'var' is bigger than this, then its
             data will not be fetched, and all properties return 'safe' values.
-            A value == 0 means never fetch, and < 0 means always check.
+            A value == 0 means never fetch, and < 0 means always fetch.
 
         Actual calculations are deferred, in addition to returning the "safe"
         values without calculation if the variable exceeds the size threshold.
