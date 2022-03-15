@@ -7,6 +7,7 @@ import re
 
 import numpy as np
 from pytest import fixture
+from ugrid_checks._var_data import VariableDataProxy
 from ugrid_checks.check import check_dataset
 from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
 
@@ -73,6 +74,111 @@ def scan_2d_mesh(cdl_scanner):
 
     // global attributes:
             :Conventions = "UGRID-1.0" ;
+    }
+    """
+    return cdl_scanner.scan(test_cdl)
+
+
+@fixture
+def scan_mini_w_data(cdl_scanner):
+    """
+    A scan for a tiny 2d mesh with all data values, for data-specific checks.
+
+    """
+    test_cdl = """
+    netcdf data_C4 {
+    dimensions:
+        faces = 2 ;
+        nodes = 5 ;
+        face_n_vertices = 4 ;
+
+    variables:
+        double sample_data(faces) ;
+            sample_data:long_name = "sample_data" ;
+            sample_data:coordinates = "x y" ;
+            sample_data:location = "face" ;
+            sample_data:mesh = "topology" ;
+        double node_y(nodes) ;
+            node_y:standard_name = "latitude" ;
+            node_y:units = "degrees_north" ;
+        double node_x(nodes) ;
+            node_x:standard_name = "longitude" ;
+            node_x:units = "degrees_east" ;
+        int face_nodes(faces, face_n_vertices) ;
+            face_nodes:cf_role = "face_node_connectivity" ;
+            face_nodes:start_index = 1 ;
+            face_nodes:_FillValue = -1 ;
+        int topology ;
+            topology:cf_role = "mesh_topology" ;
+            topology:topology_dimension = 2L ;
+            topology:node_coordinates = "node_x node_y" ;
+            topology:face_node_connectivity = "face_nodes" ;
+
+    // global attributes:
+            :Conventions = "UGRID-1.0" ;
+
+    data:
+        node_x = 0., 0., 1., 1., 2. ;
+        node_y = 0., -1., -1., 0., -1. ;
+        face_nodes = 1, 2, 3, 4, 4, 3, 5, -1 ;
+    }
+    """
+    # The above represents a ~minimal flexible 2d mesh,
+    # like this ..
+    # 1 - 4
+    # |   | \
+    # 2 - 3 - 5
+    return cdl_scanner.scan(test_cdl)
+
+
+@fixture
+def scan_lis_w_data(cdl_scanner):
+    """
+    A scan for a small 2d mesh including an LIS.
+
+    """
+    test_cdl = """
+    netcdf data_C4 {
+    dimensions:
+        faces = 3 ;
+        nodes = 6 ;
+        lis_faces = 2 ;
+        face_n_vertices = 4 ;
+
+    variables:
+        double sample_data(lis_faces) ;
+            sample_data:long_name = "sample_data" ;
+            sample_data:coordinates = "x y" ;
+            sample_data:location_index_set = "lis" ;
+        int lis(lis_faces) ;
+            lis:cf_role = "location_index_set" ;
+            lis:mesh = "topology" ;
+            lis:location = "face" ;
+            lis:start_index = 1 ;
+        double node_y(nodes) ;
+            node_y:standard_name = "latitude" ;
+            node_y:units = "degrees_north" ;
+        double node_x(nodes) ;
+            node_x:standard_name = "longitude" ;
+            node_x:units = "degrees_east" ;
+        int face_nodes(faces, face_n_vertices) ;
+            face_nodes:cf_role = "face_node_connectivity" ;
+            face_nodes:start_index = 1 ;
+            face_nodes:_FillValue = -1 ;
+        int topology ;
+            topology:cf_role = "mesh_topology" ;
+            topology:topology_dimension = 2L ;
+            topology:node_coordinates = "node_x node_y" ;
+            topology:face_node_connectivity = "face_nodes" ;
+
+    // global attributes:
+            :Conventions = "UGRID-1.0" ;
+
+    data:
+        node_x = 100., 101., 102., 103., 104., 105. ;
+        node_y = 200., 201., 202., 203., 204., 205. ;
+        face_nodes = 1, 2, 3, 4,  4, 3, 5, 6,  2, 5, 6, 1 ;
+        lis = 2, 1 ;
     }
     """
     return cdl_scanner.scan(test_cdl)
@@ -166,11 +272,30 @@ def scan_0d_mesh(cdl_scanner):
     return cdl_scanner.scan(test_cdl)
 
 
+class FakeVariableDataWrapper(VariableDataProxy):
+    def __init__(self, original_proxy, array):
+        self._original_proxy = original_proxy
+        self.array = np.asanyarray(array)
+
+    def fetch_array(self):
+        return self.array
+
+    @property
+    def datapath(self):
+        # Mirror the wrapped content : fail if there was none
+        return self._original_proxy.datapath
+
+    @property
+    def varname(self):
+        # Mirror the wrapped content : fail if there was none
+        return self._original_proxy.varname
+
+
 class DatasetChecker:
     # Generic helper functions for dataset-scan testing.
-    def _check_dataset(self, scan):
+    def _check_dataset(self, scan, *args, **kwargs):
         # Conformance-check the given scan.
-        checker = check_dataset(scan, print_summary=False)
+        checker = check_dataset(scan, print_summary=False, *args, **kwargs)
         logs = checker.logger.report_statement_logrecords()
         return logs
 
@@ -208,13 +333,21 @@ class DatasetChecker:
         # This should result in a matching list.
         assert set(actual_notes) == set(expected_notes)
 
-    def check(self, scan, code=None, message=None, statements=None):
+    def check(
+        self,
+        scan,
+        code=None,
+        message=None,
+        statements=None,
+        with_datachecks=False,
+    ):
         # Check statements generated by checking a dataset scan.
         # Usage forms :
         #   check(scan)  : expect no statements
         #   check(scan, code, message)  : expect exactly 1 statement
         #   check(scan, statements=[(code1, message1), ...])  : multiples
-        logs = self._check_dataset(scan)
+        datacheck_size = -1.0 if with_datachecks else 0.0
+        logs = self._check_dataset(scan, max_data_mb=datacheck_size)
         if statements is None:
             if code is None and message is None:
                 # Expect *no* statements.
@@ -224,19 +357,23 @@ class DatasetChecker:
                 statements = [(code, message)]
         self._expect_notes(logs, statements)
 
+    def check_withdata(self, *args, **kwargs):
+        kwargs["with_datachecks"] = True
+        self.check(*args, **kwargs)
+
     @classmethod
-    def _add_edges(cls, scan, with_facedge_conn=False):
+    def _add_edges(cls, scan, n_edges=5, with_facedge_conn=False):
         # Add edges and an edge-node connectivity to a 2d scan.
         meshvar = scan.variables["topology"]
         # Check we have the 2d scan, as 1d defines a different edges dim
         assert meshvar.attributes["topology_dimension"] == 2
-        scan.dimensions["edges"] = NcDimSummary(5)
+        scan.dimensions["edges"] = NcDimSummary(n_edges)
         scan.dimensions["n_edge_ends"] = NcDimSummary(2)
         edgenodes_name = "edge_nodes"
         scan.variables[edgenodes_name] = NcVariableSummary(
             name=edgenodes_name,
             dimensions=["edges", "n_edge_ends"],
-            shape=(5, 2),
+            shape=(n_edges, 2),
             dtype=np.dtype(np.int32),
             attributes={"cf_role": "edge_node_connectivity"},
         )
@@ -335,6 +472,12 @@ class TestChecker_Dataset(DatasetChecker):
         assert "mesh" not in data_attrs
         assert "location_index_set" in data_attrs
         self.check(scan_2d_mesh)
+
+    def test_minidata_noerror(self, scan_mini_w_data):
+        self.check_withdata(scan_mini_w_data)
+
+    def test_minidata_with_lis_noerror(self, scan_lis_w_data):
+        self.check_withdata(scan_lis_w_data)
 
     def test_a104_dataset_shared_meshdims_2(self, scan_0d_mesh):
         # Copy 'topology' mesh and all its components to 'topology_2' etc
@@ -1281,7 +1424,49 @@ class TestChecker_Coords(DatasetChecker):
         msg = r"has no 'units' attribute\."
         self.check(scan, "A204", msg)
 
-    # A205 : bounds data matching expected -- not yet implemented
+    def test_a205_data_bounds_conns_mismatch(self, scan_mini_w_data):
+        scan = scan_mini_w_data
+        # Add a face-coordinate, and a face-coordinate bounds variable.
+        scan.variables["face_x"] = NcVariableSummary(
+            name="face_x",
+            dimensions=("faces",),
+            shape=(2,),
+            dtype=np.dtype(float),
+            data=FakeVariableDataWrapper(None, np.arange(2.0)),
+            attributes={
+                "standard_name": "longitude",
+                "units": "degrees_east",
+                "bounds": "face_x_bds",
+            },
+        )
+        scan.variables["topology"].attributes["face_coordinates"] = "face_x"
+        scan.dimensions["face_bnds"] = NcDimSummary(4)
+        bounds_points = [[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 2.0, 99.0]]
+        bounds_points = np.ma.masked_greater(bounds_points, 10)
+        bdsvar = NcVariableSummary(
+            name="face_x_bds",
+            dimensions=("faces", "face_bds"),
+            shape=(2, 4),  # N.B. must match the face_nodes connectivity shape
+            dtype=np.dtype(float),
+            data=FakeVariableDataWrapper(None, bounds_points),
+        )
+        scan.variables["face_x_bds"] = bdsvar
+
+        # This should work OK
+        self.check_withdata(scan)
+
+        # Disturb the masked point : it should not matter.
+        bdsvar.data.array[1, -1] = 999.9
+        self.check_withdata(scan)
+
+        # Disturb a valid point : this should now fail.
+        bdsvar.data.array[1, 0] = 999.9
+        msg = (
+            'has bounds="face_x_bds", which does not match the expected values '
+            'calculated from the "node_x" node coordinate and the face '
+            'connectivity, "face_nodes".'
+        )
+        self.check_withdata(scan, "A205", msg)
 
 
 class TestChecker_Connectivities(DatasetChecker):
@@ -1373,7 +1558,75 @@ class TestChecker_Connectivities(DatasetChecker):
         )
         self.check(scan, "R309", msg)
 
-    # R310 / R311 -- not implementing data checks yet
+    def test_r310_required_indices_missing(self, scan_mini_w_data):
+        scan = scan_mini_w_data
+        # Add some edge data for this check, as it doesn't apply to face-nodes.
+        self._add_edges(scan, n_edges=2)
+        edge_conn = scan.variables["edge_nodes"]
+        # Replace the var data with a 'wrapped' form, to set edge-node indices
+        edge_conn.data = FakeVariableDataWrapper(
+            edge_conn.data, [[0, 1], [2, 3]]
+        )
+        # test with data checks : should be OK at this point
+        self.check_withdata(scan)
+
+        # Now add a missing point in edge-nodes, which should raise an error
+        # N.B. *don't* use a _FillValue, since that is also forbidden
+        data = edge_conn.data.array
+        data = np.ma.masked_array(data)
+        data[-1, -1] = np.ma.masked
+        edge_conn.data.array = data
+        msg = (
+            "contains missing indices, which is not permitted for a "
+            'connectivity of type "edge_node_connectivity".'
+        )
+        self.check_withdata(
+            scan,
+            statements=[
+                (
+                    "R310",
+                    msg,
+                ),
+                # Can't easily avoid getting this one also
+                ("A305", "no '_FillValue'"),
+            ],
+        )
+
+    def test_r311_subtriangle_faces(self, scan_mini_w_data):
+        scan = scan_mini_w_data
+        face_conn = scan.variables["face_nodes"]
+        # Wrap the data array to give it different values
+        modified_array = face_conn.data.fetch_array()
+        modified_array[1, 0] = np.ma.masked
+        face_conn.data = FakeVariableDataWrapper(
+            face_conn.data, modified_array
+        )
+        self.check_withdata(scan, "R311", "faces with less than 3 vertices")
+
+    def test_r311_nonstandard_dimorder(self, scan_mini_w_data):
+        # Check that the R311 test still works with nonstandard dim order
+        scan = scan_mini_w_data
+        face_conn = scan.variables["face_nodes"]
+
+        # Transpose the face-nodes connectivity
+        array = face_conn.data.fetch_array()
+        face_conn.data = FakeVariableDataWrapper(
+            face_conn.data, array.transpose()
+        )  # install a modified array
+        face_conn.dimensions = face_conn.dimensions[::-1]  # fix var dims
+        face_conn.shape = face_conn.shape[::-1]  # fix var shape
+        # also needs a 'face_dimension' attribute to avoid misinterpretation
+        scan.variables["topology"].attributes["face_dimension"] = "faces"
+
+        # That should check out OK
+        self.check_withdata(scan)
+
+        # Reduce the quad face to 2 points
+        assert face_conn.shape == (4, 2)
+        assert np.all(face_conn.data.fetch_array()[:, 0] == [1, 2, 3, 4])
+        face_conn.data.array[:2, 0] = np.ma.masked
+        # This should now raise an error
+        self.check_withdata(scan, "R311", "faces with less than 3 vertices")
 
     #
     # Advisory checks
@@ -1450,7 +1703,12 @@ class TestChecker_Connectivities(DatasetChecker):
         )
         self.check(scan, "A304", msg)
 
-    # A305 checks for missing data -- not yet implemented
+    def test_a305_missing_without_fillvalue(self, scan_mini_w_data):
+        scan = scan_mini_w_data
+        facenodes_var = scan.variables["face_nodes"]
+        del facenodes_var.attributes["_FillValue"]
+        msg = "contains missing indices, but has no '_FillValue' attribute"
+        self.check_withdata(scan, "A305", msg)
 
     def _add_edges_and_faceedges(self, scan):
         self._add_edges(scan)
@@ -1486,7 +1744,91 @@ class TestChecker_Connectivities(DatasetChecker):
         msg = r'"face_edges".* has _FillValue="999", which is not negative\.'
         self.check(scan_2d_mesh, "A307", msg)
 
-    # A308 checks values within the dim range -- not yet implemented
+    def test_a308_bad_min_index(self, scan_mini_w_data):
+        # Check for when an index is less than start-index
+        scan = scan_mini_w_data
+        facenodes_var = scan.variables["face_nodes"]
+        assert facenodes_var.attributes["start_index"] == 1
+        facenodes = facenodes_var.data.fetch_array()
+        assert np.all(facenodes[1] == [4, 3, 5, -1])
+        facenodes[1, 0] = 0
+        facenodes_var.data = FakeVariableDataWrapper(
+            facenodes_var.data, facenodes
+        )
+        msg = (
+            "minimum index value of 0, "
+            "which is less than its start-index of 1"
+        )
+        self.check_withdata(scan, "A308", msg)
+
+    def test_a308_bad_min_index_nostartindex(self, scan_mini_w_data):
+        # As previous, but using a DEFAULT start-index
+        scan = scan_mini_w_data
+
+        # remove start-index and reduce all indices to 0-based.
+        facenodes_var = scan.variables["face_nodes"]
+        del facenodes_var.attributes["start_index"]
+        facenodes = facenodes_var.data.fetch_array()
+        facenodes.data[:] = facenodes.data - 1  # NB mask remains the same
+        facenodes_var.data = FakeVariableDataWrapper(
+            facenodes_var.data, facenodes
+        )
+
+        # As it stands, that should be OK
+        self.check_withdata(scan)
+
+        # Now install a bad minimum index
+        facenodes[1, 0] = -5
+        msg = (
+            "minimum index value of -5, "
+            "which is less than its start-index of 0"
+        )
+        self.check_withdata(scan, "A308", msg)
+
+    def test_a308_bad_max_index(self, scan_mini_w_data):
+        # Check for when an index is outside the dimension range
+        scan = scan_mini_w_data
+        facenodes_var = scan.variables["face_nodes"]
+        assert facenodes_var.attributes["start_index"] == 1
+        facenodes = facenodes_var.data.fetch_array()
+        assert np.all(facenodes[1] == [4, 3, 5, -1])
+        facenodes[1, 0] = 6
+        facenodes_var.data = FakeVariableDataWrapper(
+            facenodes_var.data, facenodes
+        )
+        msg = (
+            "contains a maximum index value of 6, "
+            "which is outside the range of the "
+            'relevant "nodes" dimension, 1..5.'
+        )
+        self.check_withdata(scan, "A308", msg)
+
+    def test_a308_bad_max_index_nostartindex(self, scan_mini_w_data):
+        # As previous, but using a DEFAULT start-index
+        scan = scan_mini_w_data
+
+        # remove start-index and reduce all indices to 0-based.
+        facenodes_var = scan.variables["face_nodes"]
+        del facenodes_var.attributes["start_index"]
+        facenodes = facenodes_var.data.fetch_array()
+        facenodes.data[:] = facenodes.data - 1  # NB mask remains the same
+        facenodes_var.data = FakeVariableDataWrapper(
+            facenodes_var.data, facenodes
+        )
+
+        # this should all be OK
+        self.check_withdata(scan)
+
+        # add an invalid maximum index value
+        facenodes_var.data.array[1, 0] = 5
+
+        # should now fail.
+        msg = (
+            "contains a maximum index value of 5, "
+            "which is outside the range of the "
+            'relevant "nodes" dimension, 0..4.'
+        )
+        self.check_withdata(scan, "A308", msg)
 
 
 class TestChecker_LocationIndexSets(DatasetChecker):
@@ -1590,7 +1932,20 @@ class TestChecker_LocationIndexSets(DatasetChecker):
         msg = r'"lis" has type "float32", which is not an integer type\.'
         self.check(scan, "A401", msg)
 
-    # A402 : no missing data -- not doing data checks yet
+    def test_a402_data_missing_points(self, scan_lis_w_data):
+        scan = scan_lis_w_data
+        lisvar = scan.variables["lis"]
+        # Replace the data proxy to mimic different array contents
+        array = lisvar.data.fetch_array()
+        array = np.ma.masked_array(array)
+        array[0] = np.ma.masked
+        lisvar.data = FakeVariableDataWrapper(lisvar.data, array)
+        # Note: not using a _FillValue, as that triggers another error
+        msg = (
+            'contains "missing" index values, which should not be '
+            "present in a location-index-set"
+        )
+        self.check_withdata(scan, "A402", msg)
 
     def test_a403_conn_with_fillvalue(self, scan_0d_and_lis):
         scan, lis_var = scan_0d_and_lis
@@ -1611,8 +1966,71 @@ class TestChecker_LocationIndexSets(DatasetChecker):
         )
         self.check(scan, "A404", msg)
 
-    # R405 : distinct values -- not checking data values yet
-    # R406 : valid indices -- not checking data values yet
+    def test_a405_data_distinct_lis_values(self, scan_lis_w_data):
+        scan = scan_lis_w_data
+        lis_faces = scan.variables["lis"]
+        lis_values = lis_faces.data.fetch_array()
+        lis_values[:] = [1, 1]  # invalid due to repeating value
+        lis_faces.data = FakeVariableDataWrapper(lis_faces.data, lis_values)
+        msg = (
+            "contains repeated index values, which should not be present "
+            "in a location-index-set"
+        )
+        self.check_withdata(scan, "A405", msg)
+
+    def test_a406_data_invalid_min(self, scan_lis_w_data):
+        scan = scan_lis_w_data
+        lis_faces = scan.variables["lis"]
+        lis_values = lis_faces.data.fetch_array()
+        lis_values[0] = 0  # invalid as start-index is 1
+        lis_faces.data = FakeVariableDataWrapper(lis_faces.data, lis_values)
+        msg = (
+            "has some index value = 0, which is less than the "
+            "start-index value of 1"
+        )
+        self.check_withdata(scan, "A406", msg)
+
+    def test_a406_data_invalid_min_nostartindex(self, scan_lis_w_data):
+        # As previous, but with default start-index
+        scan = scan_lis_w_data
+        lis_faces = scan.variables["lis"]
+        del lis_faces.attributes["start_index"]
+        lis_values = lis_faces.data.fetch_array()
+        lis_values[:] = lis_values - 1  # adjust for start-index
+        lis_values[1] = -3  # this is too small
+        lis_faces.data = FakeVariableDataWrapper(lis_faces.data, lis_values)
+        msg = (
+            "has some index value = -3, which is less than the "
+            "start-index value of 0"
+        )
+        self.check_withdata(scan, "A406", msg)
+
+    def test_a406_data_invalid_max(self, scan_lis_w_data):
+        scan = scan_lis_w_data
+        lis_faces = scan.variables["lis"]
+        lis_values = lis_faces.data.fetch_array()
+        lis_values[0] = 4  # invalid
+        lis_faces.data = FakeVariableDataWrapper(lis_faces.data, lis_values)
+        msg = (
+            "contains a maximum index value of 4, which is outside the range "
+            r"of the relevant \"faces\" dimension, 1\.\.3\."
+        )
+        self.check_withdata(scan, "A406", msg)
+
+    def test_a406_data_invalid_max_nostartindex(self, scan_lis_w_data):
+        # As previous, but without a start-index attribute
+        scan = scan_lis_w_data
+        lis_faces = scan.variables["lis"]
+        del lis_faces.attributes["start_index"]
+        lis_values = lis_faces.data.fetch_array()
+        lis_values = lis_values - 1
+        lis_values[0] = 3  # invalid, as valid range is now 0..2
+        lis_faces.data = FakeVariableDataWrapper(lis_faces.data, lis_values)
+        msg = (
+            "contains a maximum index value of 3, which is outside the range "
+            r"of the relevant \"faces\" dimension, 0\.\.2\."
+        )
+        self.check_withdata(scan, "A406", msg)
 
     def test_a407_conn_start_index_badtype(self, scan_0d_and_lis):
         scan, lis_var = scan_0d_and_lis

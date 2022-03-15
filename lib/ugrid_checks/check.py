@@ -360,6 +360,10 @@ class Checker:
                     conn_nodeinds = VariableDataStats(
                         connvar, size_lim
                     ).get_data()
+                    if conn_nodeinds is not None:
+                        # Adjust for start-index
+                        start_index = connvar.attributes.get("start_index", 0)
+                        conn_nodeinds -= start_index
                     node_coordvals = VariableDataStats(
                         node_coord, size_lim
                     ).get_data()
@@ -371,7 +375,15 @@ class Checker:
                     # Construct calculated  bounds.
                     # A potentially costly 'fancy indexing' calculation
                     expected_coord_bounds = node_coordvals[conn_nodeinds]
-                    # discard component arrays, which might reduce memory
+
+                    # Mask the 'expected' array at points which are masked
+                    # (missing) in the connectivity array, since the
+                    # fancy-indexing op does *not* do that for us.
+                    # The np.allclose below will then skip those points.
+                    if np.ma.is_masked(conn_nodeinds):
+                        expected_coord_bounds.mask |= conn_nodeinds.mask
+
+                    # discard component arrays to reduce memory, maybe
                     conn_nodeinds = None
                     node_coordvals = None
 
@@ -385,7 +397,7 @@ class Checker:
                 if node_coord:
                     # Compare bounds data against calculation
                     # - a potentially even-more-costly calculation (!)
-                    if not np.allclose(expected_coord_bounds == bounds_data):
+                    if not np.allclose(expected_coord_bounds, bounds_data):
                         msg = (
                             f"does not match the expected values "
                             f'calculated from the "{node_coord.name}" '
@@ -530,6 +542,12 @@ class Checker:
             )
             log_conn("R304", msg)
 
+        # A handy common term
+        edgelike_conns = (
+            "edge_node_connectivity",
+            "boundary_node_connectivity",
+        )
+
         if meshvar:
             # Check dims : can only be checked against a parent mesh
             mesh_dims = self._all_mesh_dims[meshvar.name]
@@ -560,10 +578,6 @@ class Checker:
                     )
                     log_conn("R307", msg)
 
-            edgelike_conns = (
-                "edge_node_connectivity",
-                "boundary_node_connectivity",
-            )
             if role_name in edgelike_conns and n_parent_dims == 1:
                 (conn_nonmesh_dim,) = (
                     dim
@@ -595,13 +609,33 @@ class Checker:
             else:
                 index_offset = index_value
 
-        if role_name.endswith("_node_connectivity"):
+        if role_name in edgelike_conns:
+            # Edge- and Boundary- node arrays may not have missing points.
             if conn_stats.has_missing_values:
                 msg = (
                     "contains missing indices, which is not permitted for "
                     f'a connectivity of type "{role_name}".'
                 )
                 log_conn("R310", msg)
+        elif role_name == "face_node_connectivity":
+            # The face-node connectivity *can* have missing points,
+            # but must have >= 3 valid nodes for each face
+            if conn_stats.has_missing_values:
+                data = conn_stats.get_data()
+                if data is not None:
+                    face_dimname = meshvar.attributes.get("face_dimension")
+                    if face_dimname:
+                        face_axis = conn_var.dimensions.index(face_dimname)
+                    else:
+                        face_axis = 0
+                    vertex_axis = 1 - face_axis
+                    mask = np.ma.getmaskarray(data)
+                    face_node_counts = np.count_nonzero(
+                        ~mask, axis=vertex_axis
+                    )
+                    if np.min(face_node_counts) < 3:
+                        msg = "contains faces with less than 3 vertices."
+                        log_conn("R311", msg)
 
         #
         # Advisory checks
@@ -660,8 +694,8 @@ class Checker:
         min_ind = conn_stats.min_value
         if min_ind < index_offset:
             msg = (
-                f"has a minimum index value of {min_ind}, "
-                f"which is less than its start-index of {index_value}."
+                f"contains a minimum index value of {min_ind}, "
+                f"which is less than its start-index of {index_offset}."
             )
             log_conn("A308", msg)
 
@@ -670,12 +704,13 @@ class Checker:
             parent_dim = mesh_dims[location]
             dim = self.file_scan.dimensions.get(parent_dim)
             if dim:
-                max_ind = conn_stats.max_value - index_offset
-                if max_ind >= dim.length:
+                max_ind = conn_stats.max_value
+                if (max_ind - index_offset) >= dim.length:
                     msg = (
-                        f"has a maximum index value of {max_ind}, "
-                        "which is greater than the length of the relevant "
-                        f'"{parent_dim}" dimension, {dim.length}.'
+                        f"contains a maximum index value of {max_ind}, "
+                        "which is outside the range of the relevant "
+                        f'"{parent_dim}" dimension, '
+                        f"{index_offset}..{dim.length + index_offset - 1}."
                     )
                     log_conn("A308", msg)
 
@@ -1274,7 +1309,7 @@ class Checker:
 
         if lisvar_stats.has_missing_values:
             msg = (
-                "contains 'missing' index values, which should not be present "
+                'contains "missing" index values, which should not be present '
                 "in a location-index-set."
             )
             log_lis("A402", msg)
@@ -1316,12 +1351,13 @@ class Checker:
         if parent_dim:
             dim = self.file_scan.dimensions.get(parent_dim)
             if dim:
-                max_ind = lisvar_stats.max_value - index_offset
-                if max_ind >= dim.length:
+                max_ind = lisvar_stats.max_value
+                if (max_ind - index_offset) >= dim.length:
                     msg = (
-                        f"has some index value = {max_ind}, "
-                        "which is greater than the length of the relevant "
-                        f'"{parent_dim}" dimension, {dim.length}.'
+                        f"contains a maximum index value of {max_ind}, "
+                        "which is outside the range of the relevant "
+                        f'"{parent_dim}" dimension, '
+                        f"{index_offset}..{dim.length + index_offset - 1}."
                     )
                     log_lis("A406", msg)
 
@@ -1956,7 +1992,10 @@ def check_dataset(
         file_scan = scan_dataset(file_path)
 
     checker = Checker(
-        file_scan, ignore_codes=ignore_codes, ignore_warnings=omit_advisories
+        file_scan,
+        ignore_codes=ignore_codes,
+        ignore_warnings=omit_advisories,
+        max_mb_checks=max_data_mb,
     )
 
     if print_summary:

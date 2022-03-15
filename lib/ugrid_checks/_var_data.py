@@ -94,7 +94,7 @@ class VariableDataStats:
                     np.prod(self.var.shape) * self.var.dtype.itemsize * 1.0e-6
                 )
                 if var_size_mb < self.max_datasize:
-                    self._data = self.var.fetch_array()
+                    self._data = self.var.data.fetch_array()
                     self.has_data = True
         return self._data
 
@@ -142,7 +142,14 @@ class VariableDataStats:
             if data is None:
                 has_duplicates = False  # "Safe" answer
             else:
-                has_duplicates = len(set(data.flatten())) > 1
+                data = data.flatten()
+                # for masked data, consider only non-masked points
+                if np.ma.is_masked(data):
+                    data = data.data[~data.mask]
+                # check for number of distinct values
+                (n_data_values,) = data.shape
+                n_distinct_values = len(set(data))
+                has_duplicates = n_distinct_values < n_data_values
             self._cached_values["has_duplicate_values"] = has_duplicates
             self._discard_data_if_alldone()
         return self._cached_values["has_duplicate_values"]
