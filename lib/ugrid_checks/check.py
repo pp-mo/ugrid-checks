@@ -58,13 +58,14 @@ class StructureAnalysis:
     A class which decribes the mesh structure of a dataset, and can produce
     a structure report (string).
 
-    This is created from a Checker, to identify all the variables by role and
-    provide a mesh/location map of the dimensions.
-    It also lists the non-mesh dimensions + variables.
+    This is created from a Checker, to identify variables and dimensions with
+    key UGRID roles, and provide a mesh/location map of the dimensions.
+
+    It also identifies the non-mesh dimensions + variables.
 
     """
 
-    _indent = "    "
+    _indent = "    "  # common usage for the report methods
 
     def __init__(
         self,
