@@ -29,11 +29,15 @@ and can also produce a summary of the mesh content of a file.
 
 
 ## Installation
-Available on PyPI.
+Available on PyPI and conda-forge.
 
 To install:
 ```commandline
-> pip install ugrid-checker
+> pip install ugrid-checks
+```
+or
+```commandline
+> conda create -n ugrid_checker ugrid-checks
 ```
 
 ## Command Line : checking
