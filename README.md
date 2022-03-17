@@ -84,7 +84,7 @@ UGRID conformance checks complete.
 List of checker messages :
   *** FAIL R106 : Mesh variable "topology" attribute 'face_coordinates' refers to a variable "longitude", but there is no such variable in the dataset.
   *** FAIL R108 : Mesh variable "topology" has face_coordinates="latitude longitude", which is not a list of variables in the dataset.
-  ... WARN A304 : Mesh connectivity variable "face_nodes" of mesh "topology" has a '_FillValue' attribute, which should not be present on a "face_node_connectivity" connectivity.
+  ... WARN A304 : Mesh connectivity variable "edge_nodes" of mesh "topology" has a '_FillValue' attribute, which should not be present on a "edge_node_connectivity" connectivity.
 
 Total of 3 problems logged :
   2 Rxxx requirement failures
@@ -207,7 +207,7 @@ Within Python, the module can be used like this :
 UGRID conformance checks complete.
 
 List of checker messages :
-  ... WARN A304 : Mesh connectivity variable "face_nodes" of mesh "topology" has a '_FillValue' attribute, which should not be present on a "face_node_connectivity" connectivity.
+  ... WARN A304 : Mesh connectivity variable "edge_nodes" of mesh "topology" has a '_FillValue' attribute, which should not be present on a "edge_node_connectivity" connectivity.
 
 Total of 1 problems logged :
   0 Rxxx requirement failures
