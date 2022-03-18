@@ -4,6 +4,7 @@ from typing import AnyStr, Dict, List, Mapping, Text, Tuple, Union
 
 import numpy as np
 
+from ._var_data import VariableDataStats
 from .nc_dataset_scan import (
     NcDimSummary,
     NcFileSummary,
@@ -79,15 +80,17 @@ class Checker:
         self,
         file_scan: NcFileSummary,
         logger: CheckLoggingInterface = None,
-        do_data_checks: bool = False,
         ignore_warnings=False,
         ignore_codes: Union[List[str], None] = None,
+        max_mb_checks: float = -1.0,  # Check *any* data, by default.
     ):
         self.file_scan = file_scan
         if logger is None:
             logger = CheckLoggingInterface()
         self.logger = logger
-        self.do_data_checks = do_data_checks
+        if max_mb_checks < 0:
+            max_mb_checks = 1.0e30  # a ridiculously large number
+        self.max_mb_checks = max_mb_checks
         if ignore_codes is None:
             ignore_codes = []
         self.ignore_codes = ignore_codes
@@ -104,8 +107,13 @@ class Checker:
         self._all_mesh_dims: Dict[str, Dict[str, Union[None, str]]] = {}
         self._allowed_cfrole_varnames: List[str]
         self._orphan_connectivities: Dict[str, NcVariableSummary] = {}
+        self.data_skipped = False
         # Initialise
         self.check_dataset()
+
+    def _data_skipped_event(self):
+        # Register that, during data-checks, some data was too large.
+        self.data_skipped = True
 
     def state(self, errcode: str, vartype: str, varname: str, msg: str):
         """
@@ -220,7 +228,12 @@ class Checker:
             result = ""
         return result
 
-    def check_coord_bounds(self, coord: NcVariableSummary) -> List[Tuple[str]]:
+    def check_coord_bounds(
+        self,
+        coord: NcVariableSummary,
+        meshvar: NcVariableSummary,
+        location: str,
+    ) -> List[Tuple[str]]:
         """
         Validity-check the bounds of a coordinate (if any).
 
@@ -291,27 +304,123 @@ class Checker:
             check_attr_mismatch("standard_name")
             check_attr_mismatch("units")
 
-            # Do the data-values check.  This is potentially costly.
-            if self.do_data_checks:
-                # TODO: enable data-value checks by attaching lazy data arrays
-                # to scan variables.
-                assert bounds_var.data is not None
-                raise ValueError("Not ready for data-value checks.")
-                log_bounds_statement("A205", "???")
+            if location == "node":
+                msg = (
+                    "has a 'bounds' attribute, which is not valid for a "
+                    "coordinate of location 'node'."
+                )
+                log_bounds_statement("A206", msg)
+            else:
+                # Do the data-values check.  This is potentially costly.
+                # Check the bounds against those *calculated* from the relevant
+                # connectivity + node coordinates.
+                assert location in ("edge", "face")
+
+                # Find the relevant (required) connectivity var
+                connvar_name = property_as_single_name(
+                    meshvar.attributes.get(f"{location}_node_connectivity")
+                )
+                connvar = self._all_vars.get(connvar_name)
+
+                if connvar:
+                    # Check the shapes match as expected.
+                    if bounds_var.shape != connvar.shape:
+                        msg = (
+                            f"has shape {bounds_var.shape}, which does not "
+                            f"match the shape {connvar.shape} of the "
+                            f'{location} connectivity, "{connvar.name}".'
+                        )
+                        log_bounds_statement("A205", msg)
+                        connvar = None  # Abandon the subsequent checks
+
+                # Find a node coord with stdname + units matching this coord
+                # NOTE: node_coord=None is used to abort further calculation
+                node_coord = None
+                coord_stdname = coord.attributes.get("standard_name")
+                if connvar and coord_stdname:
+                    # Find the matching node coordinate
+                    # N.B. we need a std-name, but can tolerate missing units
+                    coord_units = coord.attributes.get("units")
+                    node_coord_names = property_namelist(
+                        meshvar.attributes.get("node_coordinates")
+                    )
+                    for node_coord_name in node_coord_names:
+                        var = self._all_vars.get(node_coord_name)
+                        if not var:
+                            continue
+                        stdname = var.attributes.get("standard_name") or ""
+                        if stdname != coord_stdname:
+                            continue
+                        if coord_units:
+                            units = var.attributes.get("units") or ""
+                            if units != coord_units:
+                                continue
+                        # ELSE: this is the one wanted
+                        node_coord = var
+                        break
+
+                if node_coord:
+                    # Fetch the connectivity and node-coord data arrays
+                    size_lim = self.max_mb_checks * 0.33
+                    conn_nodeinds = VariableDataStats(
+                        connvar, size_lim, self._data_skipped_event
+                    ).get_data()
+                    if conn_nodeinds is not None:
+                        # Adjust for start-index
+                        start_index = connvar.attributes.get("start_index", 0)
+                        conn_nodeinds -= start_index
+                    node_coordvals = VariableDataStats(
+                        node_coord, size_lim, self._data_skipped_event
+                    ).get_data()
+                    if conn_nodeinds is None or node_coordvals is None:
+                        # disable if too costly (arrays did not load).
+                        node_coord = None
+
+                if node_coord:
+                    # Construct calculated  bounds.
+                    # A potentially costly 'fancy indexing' calculation
+                    expected_coord_bounds = node_coordvals[conn_nodeinds]
+
+                    # Mask the 'expected' array at points which are masked
+                    # (missing) in the connectivity array, since the
+                    # fancy-indexing op does *not* do that for us.
+                    # The np.allclose below will then skip those points.
+                    if np.ma.is_masked(conn_nodeinds):
+                        expected_coord_bounds.mask |= conn_nodeinds.mask
+
+                    # discard component arrays to reduce memory, maybe
+                    conn_nodeinds = None
+                    node_coordvals = None
+
+                    # Fetch the bounds-variable data
+                    bounds_data = VariableDataStats(
+                        bounds_var, size_lim, self._data_skipped_event
+                    ).get_data()
+                    if bounds_data is None:
+                        node_coord = None
+
+                if node_coord:
+                    # Compare bounds data against calculation
+                    # - a potentially even-more-costly calculation (!)
+                    if not np.allclose(expected_coord_bounds, bounds_data):
+                        msg = (
+                            f"does not match the expected values "
+                            f'calculated from the "{node_coord.name}" '
+                            f"node coordinate and the {location} "
+                            f'connectivity, "{connvar.name}".'
+                        )
+                        log_bounds_statement("A205", msg)
 
         return result_codes_and_messages
 
-    def check_mesh_coordinates(
+    def check_coordinate(
         self,
+        coord: NcVariableSummary,
         meshvar: NcVariableSummary,
-        attr_name: str,
+        location: str,
     ):
-        """Validity-check a coordinate attribute of a mesh-variable."""
-        # Note: the content of the coords attribute was already checked
-
-        # Elements which change as we scan the various coords.
-        coord = None
-        common_msg_prefix = ""
+        """Validity-check a coordinate of a mesh."""
+        common_msg_prefix = f"within {meshvar.name}:{location}_coordinates "
 
         # Function to emit a statement message, adding context as to the
         # specific coord variable.
@@ -320,64 +429,58 @@ class Checker:
                 code, "Mesh coordinate", coord.name, common_msg_prefix + msg
             )
 
-        coord_names = property_namelist(meshvar.attributes.get(attr_name))
-        for coord_name in coord_names:
-            if coord_name not in self._all_vars:
-                # This problem will already have been detected + logged.
-                continue
-            coord = self._all_vars[coord_name]
-            common_msg_prefix = f"within {meshvar.name}:{attr_name} "
-            coord_ndims = len(coord.dimensions)
-            if coord_ndims != 1:
+        coord_ndims = len(coord.dimensions)
+        if coord_ndims != 1:
+            msg = (
+                f"should have exactly one dimension, but has "
+                f"{coord_ndims} dimensions : {coord.dimensions!r}."
+            )
+            log_coord("R201", msg)
+        else:
+            # Check the dimension is the correct one according to location.
+            (coord_dim,) = coord.dimensions
+            mesh_dim = self._all_mesh_dims[meshvar.name][location]
+            if coord_dim != mesh_dim:
                 msg = (
-                    f"should have exactly one dimension, but has "
-                    f"{coord_ndims} dimensions : {coord.dimensions!r}."
+                    f'has dimension "{coord_dim}", but the parent mesh '
+                    f'{location} dimension is "{mesh_dim}".'
                 )
-                log_coord("R201", msg)
-            else:
-                # Check the dimension is the correct one according to location.
-                (coord_dim,) = coord.dimensions
-                location = attr_name.split("_")[0]
-                mesh_dim = self._all_mesh_dims[meshvar.name][location]
-                if coord_dim != mesh_dim:
-                    msg = (
-                        f'has dimension "{coord_dim}", but the parent mesh '
-                        f'{location} dimension is "{mesh_dim}".'
-                    )
-                    log_coord("R202", msg)
-                # Check coord bounds (if any)
-                # N.B. this *also* assumes a single dim for the primary var
-                codes_and_messages = self.check_coord_bounds(coord)
-                for code, msg in codes_and_messages:
-                    log_coord(code, msg)
+                log_coord("R202", msg)
+            # Check coord bounds (if any)
+            # N.B. this *also* assumes a single dim for the primary var
+            codes_and_messages = self.check_coord_bounds(
+                coord, meshvar, location
+            )
+            for code, msg in codes_and_messages:
+                log_coord(code, msg)
 
-            #
-            # Advisory notes..
-            #
+        #
+        # Advisory notes..
+        #
 
-            # A201 should have 1-and-only-1 parent mesh : this is handled by
-            # 'check_dataset', as it involves multiple meshes.
+        # A201 should have 1-and-only-1 parent mesh : this is handled by
+        # 'check_dataset', as it involves multiple meshes.
 
-            # A202 floating-point type
-            dtype = coord.dtype
-            if dtype.kind != "f":
-                log_coord(
-                    "A202",
-                    f'has type "{dtype}", which is not a floating-point type.',
-                )
+        # A202 floating-point type
+        dtype = coord.dtype
+        if dtype.kind != "f":
+            log_coord(
+                "A202",
+                f'has type "{dtype}", which is not a floating-point type.',
+            )
 
-            # A203 standard-name : has+valid (can't handle fully ??)
-            stdname = coord.attributes.get("standard_name")
-            if not stdname:
-                log_coord("A203", "has no 'standard_name' attribute.")
+        # A203 standard-name : has+valid (can't handle fully ??)
+        stdname = coord.attributes.get("standard_name")
+        if not stdname:
+            log_coord("A203", "has no 'standard_name' attribute.")
 
-            # A204 units : has+valid (can't handle fully ??)
-            stdname = coord.attributes.get("units")
-            if not stdname:
-                log_coord("A204", "has no 'units' attribute.")
+        # A204 units : has+valid (can't handle fully ??)
+        stdname = coord.attributes.get("units")
+        if not stdname:
+            log_coord("A204", "has no 'units' attribute.")
 
-            # A205 bounds data values match derived ones
-            # - did this already above, within "check_coord_bounds"
+        # A205 bounds data values match derived ones
+        # - did this already above, within "check_coord_bounds"
 
     def check_connectivity(
         self,
@@ -396,6 +499,11 @@ class Checker:
         # Add to our list of variables 'allowed' to have a UGRID cf-role.
         conn_name = conn_var.name
         self._allowed_cfrole_varnames.append(conn_name)
+
+        # Create a handler object for any data checks.
+        conn_stats = VariableDataStats(
+            conn_var, self.max_mb_checks, self._data_skipped_event
+        )
 
         if meshvar:
             msg_prefix = f'of mesh "{meshvar.name}" '
@@ -441,6 +549,12 @@ class Checker:
             )
             log_conn("R304", msg)
 
+        # A handy common term
+        edgelike_conns = (
+            "edge_node_connectivity",
+            "boundary_node_connectivity",
+        )
+
         if meshvar:
             # Check dims : can only be checked against a parent mesh
             mesh_dims = self._all_mesh_dims[meshvar.name]
@@ -471,10 +585,6 @@ class Checker:
                     )
                     log_conn("R307", msg)
 
-            edgelike_conns = (
-                "edge_node_connectivity",
-                "boundary_node_connectivity",
-            )
             if role_name in edgelike_conns and n_parent_dims == 1:
                 (conn_nonmesh_dim,) = (
                     dim
@@ -491,6 +601,7 @@ class Checker:
                     )
                     log_conn("R308", msg)
 
+        index_offset = 0
         index_value = conn_var.attributes.get("start_index")
         if index_value is not None:
             # Note: check value, converted to int.
@@ -502,12 +613,36 @@ class Checker:
                     "either 0 or 1."
                 )
                 log_conn("R309", msg)
+            else:
+                index_offset = index_value
 
-        if role_name and self.do_data_checks:
-            if role_name.endswith("_node_connectivity"):
-                # Check for missing values
-                msg = "may have missing indices (NOT YET CHECKED)."
+        if role_name in edgelike_conns:
+            # Edge- and Boundary- node arrays may not have missing points.
+            if conn_stats.has_missing_values:
+                msg = (
+                    "contains missing indices, which is not permitted for "
+                    f'a connectivity of type "{role_name}".'
+                )
                 log_conn("R310", msg)
+        elif role_name == "face_node_connectivity":
+            # The face-node connectivity *can* have missing points,
+            # but must have >= 3 valid nodes for each face
+            if conn_stats.has_missing_values:
+                data = conn_stats.get_data()
+                if data is not None:
+                    face_dimname = meshvar.attributes.get("face_dimension")
+                    if face_dimname:
+                        face_axis = conn_var.dimensions.index(face_dimname)
+                    else:
+                        face_axis = 0
+                    vertex_axis = 1 - face_axis
+                    mask = np.ma.getmaskarray(data)
+                    face_node_counts = np.count_nonzero(
+                        ~mask, axis=vertex_axis
+                    )
+                    if np.min(face_node_counts) < 3:
+                        msg = "contains faces with less than 3 vertices."
+                        log_conn("R311", msg)
 
         #
         # Advisory checks
@@ -532,42 +667,59 @@ class Checker:
             log_conn("A303", msg)
 
         fill_value = conn_var.attributes.get("_FillValue")
-        if (
-            role_name
-            and role_name
-            in ("boundary_node_connectivity", "edge_node_connectivity")
-            and fill_value is not None
-        ):
+        if fill_value is None:
+            # No fill value : check there are *no* missing indices.
+            if conn_stats.has_missing_values:
+                msg = (
+                    "contains missing indices, "
+                    "but has no '_FillValue' attribute."
+                )
+                log_conn("A305", msg)
+        else:
+            if role_name and role_name in (
+                "boundary_node_connectivity",
+                "edge_node_connectivity",
+            ):
+                msg = (
+                    f"has a '_FillValue' attribute, which should not be present "
+                    f'on a "{role_name}" connectivity.'
+                )
+                log_conn("A304", msg)
+
+            if fill_value.dtype != conn_var.dtype:
+                msg = (
+                    f"has a '_FillValue' of type \"{fill_value.dtype}\", "
+                    "which is different from the variable type, "
+                    f'"{conn_var.dtype}".'
+                )
+                log_conn("A306", msg)
+
+            if fill_value >= 0:
+                msg = f'has _FillValue="{fill_value}", which is not negative.'
+                log_conn("A307", msg)
+
+        min_ind = conn_stats.min_value
+        if min_ind < index_offset:
             msg = (
-                f"has a '_FillValue' attribute, which should not be present "
-                f'on a "{role_name}" connectivity.'
-            )
-            log_conn("A304", msg)
-
-        if self.do_data_checks:
-            # check for missing indices
-            msg = "may have missing indices (NOT YET CHECKED)."
-            log_conn("A305", msg)
-
-        if fill_value is not None and fill_value.dtype != conn_var.dtype:
-            msg = (
-                f"has a '_FillValue' of type \"{fill_value.dtype}\", "
-                "which is different from the variable type, "
-                f'"{conn_var.dtype}".'
-            )
-            log_conn("A306", msg)
-
-        if fill_value is not None and fill_value >= 0:
-            msg = f'has _FillValue="{fill_value}", which is not negative.'
-            log_conn("A307", msg)
-
-        if meshvar and self.do_data_checks:
-            # check for missing indices
-            msg = (
-                "may have indices which exceed the length of the element "
-                "dimension (NOT YET CHECKED)."
+                f"contains a minimum index value of {min_ind}, "
+                f"which is less than its start-index of {index_offset}."
             )
             log_conn("A308", msg)
+
+        if meshvar:
+            location = role_name.split("_")[1]  # the 'target' role
+            parent_dim = mesh_dims[location]
+            dim = self.file_scan.dimensions.get(parent_dim)
+            if dim:
+                max_ind = conn_stats.max_value
+                if (max_ind - index_offset) >= dim.length:
+                    msg = (
+                        f"contains a maximum index value of {max_ind}, "
+                        "which is outside the range of the relevant "
+                        f'"{parent_dim}" dimension, '
+                        f"{index_offset}..{dim.length + index_offset - 1}."
+                    )
+                    log_conn("A308", msg)
 
     def check_mesh_connectivity(
         self,
@@ -851,13 +1003,20 @@ class Checker:
             log_meshvar(errcode, msg)
 
         # Check that all existing coordinates are valid.
-        for coords_name in _VALID_MESHCOORD_ATTRS:
-            location = coords_name.split("_")[0]
+        for coords_attr in _VALID_MESHCOORD_ATTRS:
+            location = coords_attr.split("_")[0]
             # Only check coords of locations present in the mesh.
             # This avoids complaints about coords dis-connected by problems
             # with the topology identification.
             if mesh_dims[location]:
-                self.check_mesh_coordinates(meshvar, coords_name)
+                coord_names = property_namelist(
+                    meshvar.attributes.get(coords_attr)
+                )
+                for coord_name in coord_names:
+                    coord = self._all_vars.get(coord_name)
+                    if coord:
+                        # If absent, that was already detected + logged.
+                        self.check_coordinate(coord, meshvar, location)
 
         # Check that all existing connectivities are valid.
         for attr in _VALID_CONNECTIVITY_ROLES:
@@ -1064,6 +1223,10 @@ class Checker:
         def log_lis(errcode, msg):
             self.state(errcode, "location-index-set", lis_var.name, msg)
 
+        lisvar_stats = VariableDataStats(
+            lis_var, self.max_mb_checks, self._data_skipped_event
+        )
+
         cf_role = lis_var.attributes.get("cf_role")
         if cf_role is None:
             log_lis("R401", "has no 'cf_role' attribute.")
@@ -1123,6 +1286,7 @@ class Checker:
         else:
             (lis_dim,) = lis_dims
 
+        index_offset = 0
         index_value = lis_var.attributes.get("start_index")
         if index_value is not None:
             # Note: check value, converted to int.
@@ -1134,6 +1298,16 @@ class Checker:
                     "either 0 or 1."
                 )
                 log_lis("R406", msg)
+            else:
+                index_offset = index_value
+
+            if index_value.dtype != lis_var.dtype:
+                msg = (
+                    f"has a 'start_index' of type \"{index_value.dtype}\", "
+                    "which is different from the variable type, "
+                    f'"{lis_var.dtype}".'
+                )
+                log_lis("A407", msg)
 
         #
         # Advisory checks
@@ -1142,9 +1316,12 @@ class Checker:
             msg = f'has type "{lis_var.dtype}", which is not an integer type.'
             log_lis("A401", msg)
 
-        if self.do_data_checks:
-            # TODO: data checks
-            log_lis("A402", "contains missing indices.")
+        if lisvar_stats.has_missing_values:
+            msg = (
+                'contains "missing" index values, which should not be present '
+                "in a location-index-set."
+            )
+            log_lis("A402", msg)
 
         if "_FillValue" in lis_var.attributes:
             msg = (
@@ -1165,29 +1342,33 @@ class Checker:
                 )
                 log_lis("A404", msg)
 
-        if self.do_data_checks:
-            # TODO: data checks
-            msg = "contains repeated index values."
-            log_lis(
-                "A405",
-            )
-            if mesh_var:
-                msg = (
-                    "contains index values which are outside the range of the "
-                    f'parent mesh "{mesh_name}" {location} dimension, '
-                    f' : "{parent_dim}", range 1..{len_parent}.'
-                )
-                log_lis(
-                    "A406",
-                )
-
-        if index_value is not None and index_value.dtype != lis_var.dtype:
+        if lisvar_stats.has_duplicate_values:
             msg = (
-                f"has a 'start_index' of type \"{index_value.dtype}\", "
-                "which is different from the variable type, "
-                f'"{lis_var.dtype}".'
+                "contains repeated index values, which should not be present "
+                "in a location-index-set."
             )
-            log_lis("A407", msg)
+            log_lis("A405", msg)
+
+        min_ind = lisvar_stats.min_value
+        if min_ind < index_offset:
+            msg = (
+                f"has some index value = {min_ind}, "
+                f"which is less than the start-index value of {index_offset}."
+            )
+            log_lis("A406", msg)
+
+        if parent_dim:
+            dim = self.file_scan.dimensions.get(parent_dim)
+            if dim:
+                max_ind = lisvar_stats.max_value
+                if (max_ind - index_offset) >= dim.length:
+                    msg = (
+                        f"contains a maximum index value of {max_ind}, "
+                        "which is outside the range of the relevant "
+                        f'"{parent_dim}" dimension, '
+                        f"{index_offset}..{dim.length + index_offset - 1}."
+                    )
+                    log_lis("A406", msg)
 
     def dataset_identify_containers(self):
         """
@@ -1497,6 +1678,12 @@ class Checker:
         line("")
         line("UGRID conformance checks complete.")
         line("")
+        if self.data_skipped:
+            line(
+                "WARNING: Some data checks skipped, "
+                f"due to arrays larger than {self.max_mb_checks} Mb."
+            )
+            line("")
         if log.N_FAILURES + log.N_WARNINGS == 0:
             line("No problems found.")
         else:
@@ -1779,6 +1966,7 @@ def check_dataset(
     print_summary: bool = True,
     omit_advisories: bool = False,
     ignore_codes: Union[List[str], None] = None,
+    max_data_mb: float = 200.0,
 ) -> Checker:
     """
     Run UGRID conformance checks on a file.
@@ -1798,6 +1986,10 @@ def check_dataset(
         advisory 'Axxx' ones.
     ignore_codes : list(str) or None, default None
         A list of error codes to ignore.
+    max_data_mb : float, default 200.0
+        A rough size threshold (in Mb), beyond which we will skip data checks.
+        Default is 0 = no data checks.
+        Can also set to -1 for "no limit".
 
     Returns
     -------
@@ -1815,7 +2007,10 @@ def check_dataset(
         file_scan = scan_dataset(file_path)
 
     checker = Checker(
-        file_scan, ignore_codes=ignore_codes, ignore_warnings=omit_advisories
+        file_scan,
+        ignore_codes=ignore_codes,
+        ignore_warnings=omit_advisories,
+        max_mb_checks=max_data_mb,
     )
 
     if print_summary:

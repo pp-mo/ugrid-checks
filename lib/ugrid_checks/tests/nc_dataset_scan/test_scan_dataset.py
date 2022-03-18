@@ -113,3 +113,16 @@ def test_global_attributes(standard_dataset_testscan):
     assert list(attrs.keys()) == ["Conventions", "comment"]
     assert attrs["Conventions"] == nparray("CF-1.0")
     assert attrs["comment"] == nparray("global comment attribute")
+
+
+def test_variable_content(standard_dataset_testscan):
+    from ..._var_data import VariableDataProxy
+
+    var_t = standard_dataset_testscan.variables["t"]
+    data = var_t.data
+    assert isinstance(data, VariableDataProxy)
+    array = data.fetch_array()
+    assert isinstance(array, np.ndarray)
+    assert array.dtype == var_t.dtype
+    assert array.shape == var_t.shape
+    assert np.all(array == [1.0, 2.0])

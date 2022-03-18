@@ -4,6 +4,8 @@ import re
 import ugrid_checks
 from ugrid_checks.check import check_dataset
 
+DATASIZE_DEFAULT_MB = 200.0
+
 
 def make_parser():
     # Process cli
@@ -12,12 +14,25 @@ def make_parser():
             "Check a netcdf-CF file for conformance to the UGRID conventions."
         )
     )
-    parser.add_argument("file", type=str, help="File to check.")
+    parser.add_argument(
+        "file",
+        type=str,
+        help="File to check.",
+        # Only treat as optional so we can support '--version' without a file.
+        nargs="?",
+    )
     parser.add_argument(
         "-q",
         "--quiet",
         action="store_true",
         help="don't print a checking report if there were no problems",
+    )
+    parser.add_argument(
+        "-i",
+        "--ignore",
+        type=str,
+        action="append",  # multiple occurs can add together
+        help="a list of errorcodes to ignore.",
     )
     parser.add_argument(
         "-e",
@@ -26,6 +41,17 @@ def make_parser():
         help=(
             'ignore all warnings ("Axxx"= advise codes), '
             'and only report errors ("Rxxx"= require codes).'
+        ),
+    )
+    parser.add_argument(
+        "-d",
+        "--max-datasize",
+        type=float,
+        default=DATASIZE_DEFAULT_MB,
+        help=(
+            "maximum array-size, "
+            "above which variable-data checks are skipped. "
+            f"Default={DATASIZE_DEFAULT_MB} (Mb)."
         ),
     )
     parser.add_argument(
@@ -38,13 +64,6 @@ def make_parser():
         "--nonmesh",
         action="store_true",
         help="include a list of non-mesh variables in the summary",
-    )
-    parser.add_argument(
-        "-i",
-        "--ignore",
-        type=str,
-        action="append",  # multiple occurs can add together
-        help="a list of errorcodes to ignore.",
     )
     parser.add_argument(
         "-v",
@@ -65,6 +84,13 @@ def call_cli(args=None):
         print("")
         print(f"UGRID file checker, version {checker_vsn}")
         print(f"    valid to CF version : {cf_vsn}")
+        # Treat this like '--help' : do nothing more.
+        exit(0)
+
+    if not args.file:
+        parser.print_help()
+        # Treat this like '--help' : do nothing more.
+        exit(0)
 
     if not args.ignore:
         ignore_codes = None
@@ -92,6 +118,7 @@ def call_cli(args=None):
         print_summary=False,  # print summary separately, if needed
         omit_advisories=args.errorsonly,
         ignore_codes=ignore_codes,
+        max_data_mb=args.max_datasize,
     )
 
     if args.summary:
@@ -103,11 +130,15 @@ def call_cli(args=None):
 
     rc = 0
     log = checker.logger
+    # Construct a return code, different from syntax errors = 2, or internal
+    # exceptions (including file access) = 1.
     if log.N_FAILURES > 0:
-        rc = 1
+        rc = 16
     if not args.errorsonly:
         if log.N_WARNINGS > 0:
-            rc = 1
+            rc |= 8
+    if checker.data_skipped:
+        rc |= 4
 
     if rc != 0 or not args.quiet:
         print(checker.checking_report())
