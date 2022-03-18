@@ -159,7 +159,7 @@ class Checker:
                         "Mesh",
                         meshvar.name,
                         f'has {attrname}="{value}", '
-                        "which is not a valid list of netcdf variable names.",
+                        "which is not a valid list of variable names.",
                     )
                     success = False
             if success:
@@ -172,7 +172,7 @@ class Checker:
                             "Mesh",
                             meshvar.name,
                             f'has {attrname}="{varname}", '
-                            "which is not a valid netcdf variable name.",
+                            "which is not a valid variable name.",
                         )
                         success = False
                     elif varname not in self._all_vars:

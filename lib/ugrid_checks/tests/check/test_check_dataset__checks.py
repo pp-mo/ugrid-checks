@@ -432,7 +432,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         meshvar.attributes["node_coordinates"] = ""
         msg = (
             '"topology" has node_coordinates="".*'
-            "is not a valid list of netcdf variable"
+            "is not a valid list of variable names"
         )
         self.check(
             scan,
@@ -449,7 +449,7 @@ class TestChecker_MeshVariables(DatasetChecker):
         meshvar.attributes["node_coordinates"] = "$123"
         msg = (
             r'"topology" has node_coordinates="\$123"'
-            ".*not a valid netcdf variable name"
+            ".*not a valid variable name"
         )
         self.check(
             scan,
@@ -505,7 +505,7 @@ class TestChecker_MeshVariables(DatasetChecker):
                     "R105",
                     (
                         '"topology" has face_node_connectivity="".*'
-                        "not a valid list of netcdf variable"
+                        "not a valid list of variable names"
                     ),
                 ),
                 (
