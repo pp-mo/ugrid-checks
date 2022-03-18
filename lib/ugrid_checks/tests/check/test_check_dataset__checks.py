@@ -921,8 +921,8 @@ class TestChecker_DataVariables(DatasetChecker):
 
     def test_r502_datavar_invalid_mesh_name(self, scan_2d_and_datavar):
         scan, datavar = scan_2d_and_datavar
-        datavar.attributes["mesh"] = "$123"
-        msg = r'mesh="\$123", which is not a valid netcdf variable name\.'
+        datavar.attributes["mesh"] = "/bad/"
+        msg = r'mesh="/bad/", which is not a valid variable name\.'
         self.check(scan, "R502", msg)
 
     def test_r502_datavar_bad_mesh_dtype(self, scan_2d_and_datavar):
@@ -999,10 +999,10 @@ class TestChecker_DataVariables(DatasetChecker):
     def test_r508_datavar_lis_invalid(self, scan_0d_with_lis_datavar):
         # The lis attribute should be a valid variable reference.
         scan, data_var = scan_0d_with_lis_datavar
-        data_var.attributes["location_index_set"] = "$123"
+        data_var.attributes["location_index_set"] = "/bad/"
         msg = (
-            r'location_index_set="\$123", '
-            r"which is not a valid netcdf variable name\."
+            r'location_index_set="/bad/", '
+            r"which is not a valid variable name\."
         )
         self.check(scan, "R508", msg)
 
@@ -1095,10 +1095,10 @@ class TestChecker_Coords(DatasetChecker):
     def test_r203_coord_bounds_bad_name(self, scan_2d_and_coordvar):
         scan, coord = scan_2d_and_coordvar
         # Add an invalid bounds attribute to the node_lon coord.
-        coord.attributes["bounds"] = "$123"
+        coord.attributes["bounds"] = "/bad/"
         msg = (
-            r'"node_lon" within topology:node_coordinates has bounds="\$123", '
-            "which is not a valid netcdf variable name"
+            r'"node_lon" within topology:node_coordinates has bounds="/bad/", '
+            r"which is not a valid variable name\."
         )
         self.check(scan, "R203", msg)
 
