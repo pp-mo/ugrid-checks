@@ -43,7 +43,7 @@ or
 ## Command Line : checking
 ```commandline
 $ ugrid-checker -h
-usage: ugrid-checker [-h] [-q] [-e] [-s] [--nonmesh] [-i IGNORE] [-v] file
+usage: ugrid-checker [-h] [-q] [-i IGNORE] [-e] [-d MAX_DATASIZE] [-s] [--nonmesh] [-v] [file]
 
 Check a netcdf-CF file for conformance to the UGRID conventions.
 
@@ -52,17 +52,17 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -q, --quiet           don't print a checking report if there were no
-                        problems
-  -e, --errorsonly      ignore all warnings ("Axxx"= advise codes), and only
-                        report errors ("Rxxx"= require codes).
-  -s, --summary         print a summary of UGRID mesh information found in the
-                        file
-  --nonmesh             include a list of non-mesh variables in the summary
+  -q, --quiet           don't print a checking report if there were no problems
   -i IGNORE, --ignore IGNORE
                         a list of errorcodes to ignore.
+  -e, --errorsonly      ignore all warnings ("Axxx"= advise codes), and only report errors ("Rxxx"= require codes).
+  -d MAX_DATASIZE, --max-datasize MAX_DATASIZE
+                        maximum array-size, above which variable-data checks are skipped. Default=200.0 (Mb).
+  -s, --summary         print a summary of UGRID mesh information found in the file
+  --nonmesh             include a list of non-mesh variables in the summary
   -v, --version         print version information
-$
+
+$ 
 ```
 
 ### Basic usage
@@ -149,12 +149,6 @@ Note : these are currently *only* available in this preliminary draft version,
 not yet accepted into the UGRID spec.
 
 ## Limitations
-#### No data value checks
-At present, none of the rules which test *actual data values in variables* are implemented.  
-   - For example : [A305](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/#A305) --
-    "a connectivity that contains missing indices should have a `_Fillvalue` property"
-
-It is intended that these checks will be added later, enabled by a new flag such as ```--datachecks```
 
 #### No 3-D / Volume support
 The draft conformance rules do not currently cover 3-d meshes, so neither does the checker code.
@@ -247,6 +241,11 @@ Please create an issue in : https://github.com/pp-mo/ugrid-checks
 
 ## Changelog
   * TODO: move to separate file ?
+  * **v0.2.0** (unreleased)
+      * [#45](https://github.com/pp-mo/ugrid-checks/pull/45) implemented all checks on
+        variable data content, subject to a datasize threshold
+      * [#48](https://github.com/pp-mo/ugrid-checks/pull/48) relaxed the requirements
+        for a valid variable name
   * [**v0.1.2**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.1.2)
     * release 2022-02-27
       * [#36](https://github.com/pp-mo/ugrid-checks/pull/36) fix to A304  
