@@ -1468,6 +1468,22 @@ class TestChecker_Coords(DatasetChecker):
         )
         self.check_withdata(scan, "A205", msg)
 
+    def test_a206_nodes_with_bounds(self, scan_2d_and_coordvar):
+        scan, coord = scan_2d_and_coordvar
+        # Add a bounds var to the node coordinates.
+        scan.variables["nodelon_bounds"] = NcVariableSummary(
+            name="node_lon_bounds",
+            dimensions=("num_node", "num_vertices"),
+            shape=(8, 4),  # N.B. must match
+            dtype=np.dtype(float),
+        )
+        coord.attributes["bounds"] = "nodelon_bounds"
+        msg = (
+            "'bounds' attribute, which is not valid for a "
+            "coordinate of location 'node'."
+        )
+        self.check(scan, "A206", msg)
+
 
 class TestChecker_Connectivities(DatasetChecker):
     @fixture

@@ -307,9 +307,9 @@ class Checker:
             if location == "node":
                 msg = (
                     "has a 'bounds' attribute, which is not valid for a "
-                    "coordinate of 'node' location."
+                    "coordinate of location 'node'."
                 )
-                log_bounds_statement("R299", msg)
+                log_bounds_statement("A206", msg)
             else:
                 # Do the data-values check.  This is potentially costly.
                 # Check the bounds against those *calculated* from the relevant
