@@ -49,8 +49,15 @@ _VALID_CF_CF_ROLES = [
     "trajectory_id",
 ]
 
-# Valid cf varname regex : copied from iris.common.metadata code.
-_VALID_NAME_REGEX = re.compile(r"""^[a-zA-Z][a-zA-Z0-9]*[\w.+\-@]*$""")
+# Valid varname regex.
+# It is not possible to use the common 'variable name' patterns,
+# as we *can* legally have variables which start with a digit, etc.
+# In principle, in netcdf anything but forward-slash is allowed
+#   - c.f. https://github.com/cf-convention/cf-conventions/issues/307
+# However, clearly, we can't really handle spaces in names.
+# FOR NOW: allow a Python "normal word character", followed by anything except
+# the forward-slash and space.
+_VALID_NAME_REGEX = re.compile(r"^\w[^ /]*$")
 
 
 class Checker:
@@ -152,7 +159,7 @@ class Checker:
                         "Mesh",
                         meshvar.name,
                         f'has {attrname}="{value}", '
-                        "which is not a valid list of netcdf variable names.",
+                        "which is not a valid list of variable names.",
                     )
                     success = False
             if success:
@@ -165,7 +172,7 @@ class Checker:
                             "Mesh",
                             meshvar.name,
                             f'has {attrname}="{varname}", '
-                            "which is not a valid netcdf variable name.",
+                            "which is not a valid variable name.",
                         )
                         success = False
                     elif varname not in self._all_vars:
@@ -202,7 +209,7 @@ class Checker:
         if succeed:
             var_name = property_as_single_name(attr_value)
             if not _VALID_NAME_REGEX.match(var_name):
-                result = "is not a valid netcdf variable name"
+                result = "is not a valid variable name"
                 succeed = False
         if succeed:
             bounds_var = self._all_vars.get(var_name)
