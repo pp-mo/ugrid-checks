@@ -9,12 +9,13 @@ import re
 
 from . import simple_incorrect_scan_and_codes, simple_scan
 from .. import cdl_scanner
-from .test_check_dataset__checks import DatasetChecker
+from .test_check_dataset__checks import DatasetChecker, scan_mini_w_data
 
 # Yes, we do need these imports.
 cdl_scanner
 simple_scan
 simple_incorrect_scan_and_codes
+scan_mini_w_data
 
 
 from ugrid_checks.check import check_dataset
@@ -28,6 +29,7 @@ class Test_CheckerControls(DatasetChecker):
         print_summary=False,
         omit_advisories=False,
         ignore_codes=None,
+        max_data_mb=200.0,
         # This arg defines the expected results
         expected_codes=None,
     ):
@@ -39,6 +41,7 @@ class Test_CheckerControls(DatasetChecker):
             print_summary=print_summary,
             omit_advisories=omit_advisories,
             ignore_codes=ignore_codes,
+            max_data_mb=max_data_mb,
         )
         logs = checker.logger.report_statement_logrecords()
 
@@ -55,6 +58,7 @@ class Test_CheckerControls(DatasetChecker):
         )
         assert checker.logger.N_FAILURES == expect_n_err
         assert checker.logger.N_WARNINGS == expect_n_warn
+        return checker
 
     def test_noerrors(self, simple_scan):
         self.check(simple_scan, expected_codes=[])
@@ -92,3 +96,10 @@ class Test_CheckerControls(DatasetChecker):
         ignores = ["R101", "A903"]
         codes = [code for code in codes if code not in ignores]
         self.check(scan, ignore_codes=ignores, expected_codes=codes)
+
+    def test_size_threshold(self, scan_mini_w_data):
+        scan = scan_mini_w_data
+        checker = self.check(scan, expected_codes=[])
+        assert not checker.data_skipped
+        checker = self.check(scan, max_data_mb=0.0, expected_codes=[])
+        assert checker.data_skipped

@@ -82,7 +82,7 @@ class Checker:
         logger: CheckLoggingInterface = None,
         ignore_warnings=False,
         ignore_codes: Union[List[str], None] = None,
-        max_mb_checks: float = 0.0,  # Don't do *any* data-checks, by default.
+        max_mb_checks: float = -1.0,  # Check *any* data, by default.
     ):
         self.file_scan = file_scan
         if logger is None:
@@ -1986,10 +1986,10 @@ def check_dataset(
         advisory 'Axxx' ones.
     ignore_codes : list(str) or None, default None
         A list of error codes to ignore.
-    max_data_mb : float, default 0.0
-        A size threshold, beyond which we will skip data checks.
+    max_data_mb : float, default 200.0
+        A rough size threshold (in Mb), beyond which we will skip data checks.
         Default is 0 = no data checks.
-        Can also set to -1 for "accept any"
+        Can also set to -1 for "no limit".
 
     Returns
     -------

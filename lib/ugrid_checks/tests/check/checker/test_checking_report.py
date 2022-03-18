@@ -22,12 +22,12 @@ from ugrid_checks.check import Checker
 @fixture
 def test_checker_incorrect(simple_incorrect_scan_and_codes):
     scan, _ = simple_incorrect_scan_and_codes
-    return Checker(scan)
+    return Checker(scan, max_mb_checks=0)
 
 
 @fixture
 def test_checker_noerror(simple_scan):
-    return Checker(simple_scan)
+    return Checker(simple_scan, max_mb_checks=0)
 
 
 class Test_CheckReport(DatasetChecker):
