@@ -27,8 +27,9 @@ def emptydict():
 
 @dataclass()
 class UgridDatavar:
-    """Represents a mesh-data-variable."""
-
+    """
+    Represents a mesh-data-variable.
+    """
     name: str
     var: Var  # original low-level data
     # N.B. UgridMesh/UgridLis are *not* the actual final types at this point,
@@ -37,17 +38,12 @@ class UgridDatavar:
     mesh: Union[UgridMesh, None] = None
     location: Union[Location, None] = None
 
-    def is_mesh_based(self):
-        return self.mesh is not None
-
-    def is_lis_based(self):
-        return not self.is_mesh_based()
-
 
 @dataclass()
 class UgridMesh:
-    """Represents a mesh."""
-
+    """
+    Represents a mesh.
+    """
     name: str
     var: Var  # original low-level data
     # N.B. lis not final type, to avoid circular definitions
@@ -63,8 +59,9 @@ class UgridMesh:
 
 @dataclass()
 class UgridLis:
-    """Represents a location-index-set."""
-
+    """
+    Represents a location-index-set.
+    """
     name: str
     var: Var
     mesh: UgridMesh
@@ -82,15 +79,16 @@ class _Dims_MeshNonmeshAll:
 
 @dataclass
 class _Vars_MeshNonmeshAll:
-    all: DimsMap = emptydict()
-    mesh: DimsMap = emptydict()
-    nonmesh: DimsMap = emptydict()
+    all: VarsMap = emptydict()
+    mesh: VarsMap = emptydict()
+    nonmesh: VarsMap = emptydict()
 
 
 @dataclass()
 class UgridFileStructure:
-    """Represents the mesh structure of an entire dataset."""
-
+    """
+    Represents the mesh structure of an entire dataset.
+    """
     dims: _Dims_MeshNonmeshAll = _Dims_MeshNonmeshAll()
     vars: _Vars_MeshNonmeshAll = _Vars_MeshNonmeshAll()
     meshes: Dict[Varname, UgridMesh] = emptydict()
