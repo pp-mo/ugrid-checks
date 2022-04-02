@@ -39,6 +39,13 @@ class UgridDatavar:
     location: Union[Location, None] = None
 
 
+@dataclass
+class _CoordsLocationMap:
+    node: VarsMap = emptydict()
+    edge: VarsMap = emptydict()
+    face: VarsMap = emptydict()
+
+
 @dataclass()
 class UgridMesh:
     """
@@ -48,7 +55,7 @@ class UgridMesh:
     var: Var  # original low-level data
     # N.B. lis not final type, to avoid circular definitions
     lisets: Dict[Varname, UgridLis] = emptydict()
-    coords: Dict[Location, VarsMap] = emptydict()
+    coords: Dict[Location, VarsMap] = _CoordsLocationMap()
     conns: Dict[Role, Var] = emptydict()
     # Additional summary info
     all_dims: DimsMap = emptydict()
@@ -85,7 +92,7 @@ class _Vars_MeshNonmeshAll:
 
 
 @dataclass()
-class UgridFileStructure:
+class UgridDataset:
     """
     Represents the mesh structure of an entire dataset.
     """

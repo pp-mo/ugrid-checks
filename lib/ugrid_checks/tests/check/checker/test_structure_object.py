@@ -30,3 +30,8 @@ class Test_StructureObject(DatasetChecker):
         scan = simple_scan_w_nonmesh
         result = self.get_struct(scan)
         print(result)
+
+    def test_2d(self, scan_2d_mesh):
+        scan = scan_2d_mesh
+        result = self.get_struct(scan)
+        print(result)
