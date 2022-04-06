@@ -16,9 +16,7 @@ from .scan_utils import (
     property_namelist,
     vars_w_props,
 )
-from .structure import (
-    UgridDatavar, UgridDataset, UgridLis, UgridMesh,
-)
+from .structure import UgridDataset, UgridDatavar, UgridLis, UgridMesh
 from .ugrid_logger import CheckLoggingInterface
 
 __all__ = ["Checker", "check_dataset"]
@@ -1842,7 +1840,7 @@ class StructureReporter:
                     self._line(f'node("{dim}")', 2)
                     coords = self._varlist_str(mesh_var, "node_coordinates")
                     self._line(f"coordinates : {coords}", 3)
-                    coords = mesh_var.attributes.get('node_coordinates', '')
+                    coords = mesh_var.attributes.get("node_coordinates", "")
                     coords = str(coords).split()
                     struct_mesh.coords.node = self._valid_vars_map(coords)
                 # Other dims all reported in the same way
@@ -1855,21 +1853,21 @@ class StructureReporter:
                         self._line(f"{connattr_name} : {conn_str}", 3)
                         coords_attrname = f"{location}_coordinates"
                         if coords_attrname in mesh_var.attributes:
-                            coords = self._varlist_str(mesh_var, coords_attrname)
+                            coords = self._varlist_str(
+                                mesh_var, coords_attrname
+                            )
                             self._line(f"coordinates : {coords}", 3)
 
                         if struct_mesh is not None:
                             conn_name = mesh_var.attributes.get(connattr_name)
                             conn = self._valid_var(conn_name)
                             struct_mesh.conns[connattr_name] = conn
-                            coords_attr = mesh_var.attributes.get(coords_attrname)
+                            coords_attr = mesh_var.attributes.get(
+                                coords_attrname
+                            )
                             coord_varnames = property_namelist(coords_attr)
                             coords = self._valid_vars_map(coord_varnames)
-                            setattr(
-                                struct_mesh.coords,
-                                location,
-                                coords
-                            )
+                            setattr(struct_mesh.coords, location, coords)
                 # List *optional* connectivities of the mesh
                 # N.B. the "<x>_node..." are required connectivities, which
                 # are displayed above, under their locations.

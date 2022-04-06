@@ -30,6 +30,7 @@ class UgridDatavar:
     """
     Represents a mesh-data-variable.
     """
+
     name: str
     var: Var  # original low-level data
     # N.B. UgridMesh/UgridLis are *not* the actual final types at this point,
@@ -51,16 +52,16 @@ class UgridMesh:
     """
     Represents a mesh.
     """
+
     name: str
     var: Var  # original low-level data
-    # N.B. lis not final type, to avoid circular definitions
-    lisets: Dict[Varname, UgridLis] = emptydict()
-    coords: Dict[Location, VarsMap] = _CoordsLocationMap()
-    conns: Dict[Role, Var] = emptydict()
+    # N.B. 'UgridLis' is *not* the final type, to avoid circular definitions
+    location_coords: Dict[Location, VarsMap] = _CoordsLocationMap()
+    role_conns: Dict[Role, Var] = emptydict()
     # Additional summary info
+    location_dims: DimsMap = emptydict()
     all_dims: DimsMap = emptydict()
-    all_coords: VarsMap = emptydict()
-    all_conns: VarsMap = emptydict()
+    lisets: Dict[Varname, UgridLis] = emptydict()
     datavars: Dict[Varname, UgridDatavar] = emptydict()
 
 
@@ -69,6 +70,7 @@ class UgridLis:
     """
     Represents a location-index-set.
     """
+
     name: str
     var: Var
     mesh: UgridMesh
@@ -96,6 +98,7 @@ class UgridDataset:
     """
     Represents the mesh structure of an entire dataset.
     """
+
     dims: _Dims_MeshNonmeshAll = _Dims_MeshNonmeshAll()
     vars: _Vars_MeshNonmeshAll = _Vars_MeshNonmeshAll()
     meshes: Dict[Varname, UgridMesh] = emptydict()
