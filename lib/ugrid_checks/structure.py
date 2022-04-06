@@ -1,21 +1,24 @@
 import dataclasses
 from dataclasses import dataclass
-from typing import Dict, Literal, Optional
+from typing import Dict, Optional
 
 import numpy as np
 from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
 
 # Basic classes with convenience names
 Varname = str
-Location = Literal["node", "edge", "face"]
-Role = Literal[
-    "edge_node_connectivity",
-    "face_node_connectivity",
-    "face_edge_connectivity",
-    "edge_face_connectivity",
-    "face_face_connectivity",
-    "boundary_node_connectivity",
-]
+# Location = Literal["node", "edge", "face"]
+# Role = Literal[
+#     "edge_node_connectivity",
+#     "face_node_connectivity",
+#     "face_edge_connectivity",
+#     "edge_face_connectivity",
+#     "face_face_connectivity",
+#     "boundary_node_connectivity",
+# ]
+# Dropped for now : "Literal" types not available in Python 3.7
+Location = str
+Role = str
 Var = NcVariableSummary
 Dim = NcDimSummary
 VarsMap = Dict[Varname, Var]
