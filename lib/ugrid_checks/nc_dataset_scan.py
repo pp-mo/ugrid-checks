@@ -50,7 +50,7 @@ class NcVariableSummary:
     shape: Tuple[int, ...]  #
 
     #: Numpy dtype, consistent with 'data', if any
-    dtype: object
+    dtype: np.dtype
 
     #: Attributes : values are numpy scalars or 0-1 dimensional arrays
     attributes: Mapping[Text, np.ndarray]

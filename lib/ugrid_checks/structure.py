@@ -1,22 +1,26 @@
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Dict, Union
+from typing import Dict, Literal, Optional
 
+import numpy as np
 from ugrid_checks.nc_dataset_scan import NcDimSummary, NcVariableSummary
 
 # Basic classes with convenience names
 Varname = str
-Location = str  # From _VALID_UGRID_LOCATIONS only
-Role = str  # From _VALID_UGRID_CF_ROLES only
+Location = Literal["node", "edge", "face"]
+Role = Literal[
+    "edge_node_connectivity",
+    "face_node_connectivity",
+    "face_edge_connectivity",
+    "edge_face_connectivity",
+    "face_face_connectivity",
+    "boundary_node_connectivity",
+]
 Var = NcVariableSummary
 Dim = NcDimSummary
 VarsMap = Dict[Varname, Var]
 DimsMap = Dict[Varname, Dim]
-
-
-# Initially pre-set these types, to avoid circular dependencies
-UgridMesh = Any
-UgridLis = Any
+Attrs = Dict[Varname, np.ndarray]
 
 
 # Assign this to make a dataclass field default to an empty dict.
@@ -33,11 +37,9 @@ class UgridDatavar:
 
     name: str
     var: Var  # original low-level data
-    # N.B. UgridMesh/UgridLis are *not* the actual final types at this point,
-    # to avoid circular definitions
-    lis: Union[UgridLis, None] = None
-    mesh: Union[UgridMesh, None] = None
-    location: Union[Location, None] = None
+    lis: Optional["UgridLis"] = None
+    mesh: Optional["UgridMesh"] = None
+    location: Optional[Location] = None
 
 
 @dataclass
@@ -55,13 +57,12 @@ class UgridMesh:
 
     name: str
     var: Var  # original low-level data
-    # N.B. 'UgridLis' is *not* the final type, to avoid circular definitions
-    location_coords: Dict[Location, VarsMap] = _CoordsLocationMap()
-    role_conns: Dict[Role, Var] = emptydict()
+    coords: _CoordsLocationMap = _CoordsLocationMap()
+    conns: Dict[Role, Var] = emptydict()
     # Additional summary info
-    location_dims: DimsMap = emptydict()
+    location_dims: Dict[Location, Dim] = emptydict()
     all_dims: DimsMap = emptydict()
-    lisets: Dict[Varname, UgridLis] = emptydict()
+    lisets: Dict[Varname, "UgridLis"] = emptydict()
     datavars: Dict[Varname, UgridDatavar] = emptydict()
 
 
@@ -104,3 +105,4 @@ class UgridDataset:
     meshes: Dict[Varname, UgridMesh] = emptydict()
     lises: Dict[Varname, UgridLis] = emptydict()
     datavars: Dict[Varname, UgridDatavar] = emptydict()
+    global_attributes: Dict[Varname, Attrs] = emptydict()

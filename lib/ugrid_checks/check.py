@@ -1708,6 +1708,7 @@ class Checker:
         reporter = StructureReporter(
             all_file_dims=self.file_scan.dimensions,
             all_file_vars=self.file_scan.variables,
+            all_file_attrs=self.file_scan.attributes,
             mesh_location_dims=self._all_mesh_dims,
             mesh_vars=self._mesh_vars,
             lis_vars=self._lis_vars,
@@ -1753,6 +1754,7 @@ class StructureReporter:
         self,
         all_file_dims: Mapping[Text, NcDimSummary],
         all_file_vars: Mapping[Text, NcVariableSummary],
+        all_file_attrs: Mapping[Text, np.ndarray],
         mesh_location_dims: Dict[str, Dict[str, Union[None, str]]],
         mesh_vars: Dict[str, NcVariableSummary],
         lis_vars: Dict[str, NcVariableSummary],
@@ -1761,6 +1763,7 @@ class StructureReporter:
     ):
         self.all_file_dims = all_file_dims
         self.all_file_vars = all_file_vars
+        self.all_file_attrs = all_file_attrs
         self.mesh_location_dims = mesh_location_dims
         self.mesh_vars = mesh_vars
         self.lis_vars = lis_vars
@@ -1785,7 +1788,7 @@ class StructureReporter:
 
     def structure_info(self):
         """Construct + return a structure object."""
-        self._struct = UgridDataset()
+        self._struct = UgridDataset(global_attributes=self.all_file_attrs)
         self._struct.dims.all = self.all_file_dims
         self._struct.vars.all = self.all_file_vars
         self._mesh_report()
