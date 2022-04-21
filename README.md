@@ -184,12 +184,15 @@ Within Python, the module can be used like this :
         advisory 'Axxx' ones.
     ignore_codes : list(str) or None, default None
         A list of error codes to ignore.
+    max_data_mb : float, default 200.0
+        A rough size threshold (in Mb), beyond which we will skip data checks.
+        Default is 0 = no data checks.
+        Can also set to -1 for "no limit".
 
     Returns
     -------
     checker : Checker
         A checker for the file.
-
     
 >>>
 >>> checker = check_dataset('data_C4_warn.nc', print_summary=False)
