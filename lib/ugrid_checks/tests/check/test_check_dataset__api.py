@@ -5,6 +5,7 @@ N.B. the actual checker function is tested in
 :mod:tests.check.test_check_dataset__checks
 
 """
+import logging
 import re
 
 from . import simple_incorrect_scan_and_codes, simple_scan
@@ -44,6 +45,8 @@ class Test_CheckerControls(DatasetChecker):
             max_data_mb=max_data_mb,
         )
         logs = checker.logger.report_statement_logrecords()
+        # Prune out the test name messages (level INFO)
+        logs = [log for log in logs if log.levelno >= logging.WARNING]
 
         # Check that the list of statements is as expected
         expected_statements = [(code, "") for code in expected_codes]

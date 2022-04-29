@@ -28,10 +28,10 @@ class CheckLoggingInterface:
 
     def __init__(self, logger=None, handler=None):
         if logger is None:
-            logger = logging.Logger("ugrid_conformance")
+            logger = logging.Logger("ugrid_conformance", level=logging.INFO)
         self._logger = logger
         if handler is None:
-            handler = UgridLogHandler(level=logging.INFO)
+            handler = UgridLogHandler(level=0)  # level=logging.INFO)
         self._handler = handler
         #: Control printing of messages as they are logged (debug).
         self._ENABLE_PRINT = False

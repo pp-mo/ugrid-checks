@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import re
 from typing import AnyStr, Dict, List, Mapping, Text, Tuple, Union
@@ -115,7 +116,13 @@ class Checker:
         # Register that, during data-checks, some data was too large.
         self.data_skipped = True
 
-    def state(self, errcode: str, vartype: str, varname: str, msg: str):
+    def state(
+        self,
+        errcode: str = "",
+        vartype: str = "",
+        varname: str = "",
+        msg: str = "",
+    ):
         """
         Log a checking statement.
 
@@ -125,6 +132,33 @@ class Checker:
         if errcode not in self.ignore_codes:
             if not self.ignore_warnings or not errcode.startswith("A"):
                 self.logger.state(errcode, vartype, varname, msg)
+
+    TESTIDENT_MESSAGE_PREFIX = "__TEST_NAME"
+
+    def test_ident(self, test_name: str):
+        """
+        Set the "test name" context for subsequent "state" records.
+
+        This logs a distinct informational message in the test log, which
+        establishes a "test name" context for following statements.
+        ( The context applies until it is changed again ).
+
+        Added to enable conversion of the statements log into the
+        "n_passed / n_of" information structure of the IOOS checker framework.
+        See : https://github.com/ioos/compliance-checker/wiki/Development#compliance-checker-internals
+
+        Parameters
+        ----------
+        test_name : str
+            The name of a test, e.g. "coordinate dimensions".
+            Note that colons (':') may also be used to indicate a sub-context,
+            e.g. "connectivity dimensions:number".
+
+        """
+        # Note: the colon is explicit here.
+        self.logger.report(
+            f"{self.TESTIDENT_MESSAGE_PREFIX}:{test_name}", level=logging.INFO
+        )
 
     def check_mesh_attr_is_varlist(
         self, meshvar: NcVariableSummary, attrname: str
@@ -429,6 +463,7 @@ class Checker:
                 code, "Mesh coordinate", coord.name, common_msg_prefix + msg
             )
 
+        self.test_ident("Coordinate dimensions")
         coord_ndims = len(coord.dimensions)
         if coord_ndims != 1:
             msg = (
@@ -461,6 +496,7 @@ class Checker:
         # A201 should have 1-and-only-1 parent mesh : this is handled by
         # 'check_dataset', as it involves multiple meshes.
 
+        self.test_ident("Coordinate dtype")
         # A202 floating-point type
         dtype = coord.dtype
         if dtype.kind != "f":
@@ -470,11 +506,13 @@ class Checker:
             )
 
         # A203 standard-name : has+valid (can't handle fully ??)
+        self.test_ident("Coordinate standard name")
         stdname = coord.attributes.get("standard_name")
         if not stdname:
             log_coord("A203", "has no 'standard_name' attribute.")
 
         # A204 units : has+valid (can't handle fully ??)
+        self.test_ident("Coordinate units")
         stdname = coord.attributes.get("units")
         if not stdname:
             log_coord("A204", "has no 'units' attribute.")
@@ -515,6 +553,7 @@ class Checker:
                 errcode, "Mesh connectivity", conn_name, msg_prefix + msg
             )
 
+        self.test_ident("Connectivity cf_role")
         cf_role = conn_var.attributes.get("cf_role")
         if cf_role is None:
             log_conn("R301", "has no 'cf_role' attribute.")
@@ -540,6 +579,7 @@ class Checker:
             # definition -- if there is one.
             role_name = str(cf_role) if cf_role else None
 
+        self.test_ident("Connectivity n-dimensions")
         conn_dims = conn_var.dimensions
         dims_msg = f"has dimensions {conn_dims!r}"
         if len(conn_dims) != 2:
@@ -557,6 +597,7 @@ class Checker:
 
         if meshvar:
             # Check dims : can only be checked against a parent mesh
+            self.test_ident("Connectivity element and non-element dimensions")
             mesh_dims = self._all_mesh_dims[meshvar.name]
             is_parent_dim = [dim in mesh_dims.values() for dim in conn_dims]
             n_parent_dims = sum(is_parent_dim)
@@ -607,6 +648,7 @@ class Checker:
             # Note: check value, converted to int.
             # This avoids an extra warning for strings like "0", "1",
             # since a non-integral type triggers an A302 warning anyway.
+            self.test_ident("Connectivity start_index")
             if int(index_value) not in (0, 1):
                 msg = (
                     f'has start_index="{index_value}", which is not '
@@ -618,18 +660,22 @@ class Checker:
 
         if role_name in edgelike_conns:
             # Edge- and Boundary- node arrays may not have missing points.
-            if conn_stats.has_missing_values:
-                msg = (
-                    "contains missing indices, which is not permitted for "
-                    f'a connectivity of type "{role_name}".'
-                )
-                log_conn("R310", msg)
+            has_missing = conn_stats.has_missing_values
+            if conn_stats.has_data:
+                self.test_ident("Connectivity missing values")
+                if has_missing:
+                    msg = (
+                        "contains missing indices, which is not permitted for "
+                        f'a connectivity of type "{role_name}".'
+                    )
+                    log_conn("R310", msg)
         elif role_name == "face_node_connectivity":
             # The face-node connectivity *can* have missing points,
             # but must have >= 3 valid nodes for each face
             if conn_stats.has_missing_values:
                 data = conn_stats.get_data()
                 if data is not None:
+                    self.test_ident("Face-node valid face n-nodes")
                     face_dimname = meshvar.attributes.get("face_dimension")
                     if face_dimname:
                         face_axis = conn_var.dimensions.index(face_dimname)
@@ -651,6 +697,7 @@ class Checker:
         # A301 1-and-only-1 parent mesh
         # In 'dataset_detect_multiple_refs', since it involves multiple meshes
 
+        self.test_ident("Connectivity dtype")
         if conn_var.dtype.kind != "i":
             msg = (
                 f'has type "{conn_var.dtype}", '
@@ -658,24 +705,30 @@ class Checker:
             )
             log_conn("A302", msg)
 
-        if index_value is not None and index_value.dtype != conn_var.dtype:
-            msg = (
-                f"has a 'start_index' of type \"{index_value.dtype}\", "
-                "which is different from the variable type, "
-                f'"{conn_var.dtype}".'
-            )
-            log_conn("A303", msg)
+        if index_value is not None:
+            self.test_ident("Connectivity start_index dtype")
+            if index_value.dtype != conn_var.dtype:
+                msg = (
+                    f"has a 'start_index' of type \"{index_value.dtype}\", "
+                    "which is different from the variable type, "
+                    f'"{conn_var.dtype}".'
+                )
+                log_conn("A303", msg)
 
         fill_value = conn_var.attributes.get("_FillValue")
         if fill_value is None:
             # No fill value : check there are *no* missing indices.
-            if conn_stats.has_missing_values:
-                msg = (
-                    "contains missing indices, "
-                    "but has no '_FillValue' attribute."
-                )
-                log_conn("A305", msg)
+            has_missing = conn_stats.has_missing_values
+            if conn_stats.has_data:
+                self.test_ident("Connectivity missing indices")
+                if has_missing:
+                    msg = (
+                        "contains missing indices, "
+                        "but has no '_FillValue' attribute."
+                    )
+                    log_conn("A305", msg)
         else:
+            self.test_ident("Connectivity _FillValue")
             if role_name and role_name in (
                 "boundary_node_connectivity",
                 "edge_node_connectivity",
@@ -755,6 +808,8 @@ class Checker:
         def log_meshvar(code, msg):
             self.state(code, "Mesh", meshvar.name, msg)
 
+        self.test_ident("Mesh valid topology")
+
         # First check for bad 'cf_role' :
         # if wrong, meshvar can only have been identified by reference.
         cfrole_prop = meshvar.attributes.get("cf_role", None)
@@ -789,6 +844,7 @@ class Checker:
                 )
                 log_meshvar("A905", msg)
 
+        self.test_ident("Mesh topology_dimension")
         topology_dimension = meshvar.attributes.get("topology_dimension")
         if topology_dimension is None:
             log_meshvar("R103", "has no 'topology_dimension' attribute.")
@@ -860,6 +916,7 @@ class Checker:
                     )
                 log_meshvar(errcode, msg)
 
+        self.test_ident("Mesh connectivity attributes")
         # Check all coordinate and connectivity attributes are valid "varlists"
         varlist_names = _VALID_MESHCOORD_ATTRS + _VALID_CONNECTIVITY_ROLES
         for attr in varlist_names:

@@ -348,6 +348,8 @@ class DatasetChecker:
         #   check(scan, statements=[(code1, message1), ...])  : multiples
         datacheck_size = -1.0 if with_datachecks else 0.0
         logs = self._check_dataset(scan, max_data_mb=datacheck_size)
+        # Prune out the test name messages (level INFO)
+        logs = [log for log in logs if log.levelno >= logging.WARNING]
         if statements is None:
             if code is None and message is None:
                 # Expect *no* statements.
