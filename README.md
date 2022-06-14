@@ -244,6 +244,7 @@ Please create an issue in : https://github.com/pp-mo/ugrid-checks
 ## Changelog
   * TODO: move to separate file ?
   * [**v0.2.0**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.2.0)
+    * release 2022-06-14
       * [#45](https://github.com/pp-mo/ugrid-checks/pull/45) implemented all checks on
         variable data content, subject to a datasize threshold
       * [#48](https://github.com/pp-mo/ugrid-checks/pull/48) relaxed the requirements
