@@ -7,7 +7,7 @@
 [![bsd-3-clause](https://img.shields.io/github/license/pp-mo/ugrid-checks)](https://github.com/pp-mo/ugrid-checks/blob/main/LICENSE)
 [![black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-**Version : 0.1.2**
+**Version : 0.2.0**
 
 A utility to check netcdf files to the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
 
@@ -243,7 +243,7 @@ Please create an issue in : https://github.com/pp-mo/ugrid-checks
 
 ## Changelog
   * TODO: move to separate file ?
-  * **v0.2.0** (unreleased)
+  * [**v0.2.0**](https://github.com/pp-mo/ugrid-checks/releases/tag/v0.2.0)
       * [#45](https://github.com/pp-mo/ugrid-checks/pull/45) implemented all checks on
         variable data content, subject to a datasize threshold
       * [#48](https://github.com/pp-mo/ugrid-checks/pull/48) relaxed the requirements
