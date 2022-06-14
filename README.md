@@ -186,8 +186,7 @@ Within Python, the module can be used like this :
         A list of error codes to ignore.
     max_data_mb : float, default 200.0
         A rough size threshold (in Mb), beyond which we will skip data checks.
-        Default is 0 = no data checks.
-        Can also set to -1 for "no limit".
+        Set to 0 for no checking, or -1 for no size limit.
 
     Returns
     -------
