@@ -232,7 +232,7 @@ Please refer to code docstrings for more detail.
 
 
 ## Runtime Requirements
-  * Python >= 3.7
+  * Python >= 3.8
   * [netCDF4](https://github.com/Unidata/netcdf4-python)
 
 ## Known Issues
