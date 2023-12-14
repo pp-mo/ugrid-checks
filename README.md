@@ -11,7 +11,7 @@
 
 A utility to check netcdf files to the [UGRID specification](http://ugrid-conventions.github.io/ugrid-conventions/).
 
-It tests files against the UGRID [conformance rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/),
+It tests files against the UGRID [conformance rules](https://ugrid-conventions.github.io/ugrid-conventions/conformance),
 and can also produce a summary of the mesh content of a file.
 
   * [Installation](#installation)
@@ -143,7 +143,7 @@ $
 All the error/warning codes used are defined in the UGRID conformance rules. 
 Each has an identifying code : "Rxxx" for requirements or "Axxx" for advisory rules.
 
-See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.readthedocs.io/en/conformance/conformance/) 
+See the list here : [UGRID Draft Conformance Rules](https://ugrid-conventions.github.io/ugrid-conventions/conformance/) 
 
 Note : these are currently *only* available in this preliminary draft version,
 not yet accepted into the UGRID spec.
