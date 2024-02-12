@@ -2,6 +2,7 @@
 Tests for :meth:`ugrid_checks.check.Checker.structure_report()`.
 
 """
+
 import re
 
 import numpy as np

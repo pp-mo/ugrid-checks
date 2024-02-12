@@ -2,6 +2,7 @@
 Tests for ugrid_checks.nc_scan_dataset.scan_dataset
 
 """
+
 import numpy as np
 from numpy import asanyarray as nparray
 from pytest import fixture

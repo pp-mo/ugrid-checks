@@ -1,4 +1,5 @@
 """Slightly crude, but ugrid-check-specific logging."""
+
 import logging
 from typing import List, Union
 

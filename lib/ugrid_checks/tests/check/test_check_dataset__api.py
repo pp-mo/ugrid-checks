@@ -5,6 +5,7 @@ N.B. the actual checker function is tested in
 :mod:tests.check.test_check_dataset__checks
 
 """
+
 import re
 
 from . import simple_incorrect_scan_and_codes, simple_scan
