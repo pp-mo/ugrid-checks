@@ -2,6 +2,7 @@
 Tests for :meth:`ugrid_checks.check.Checker.checking_report()`.
 
 """
+
 import re
 
 from pytest import fixture

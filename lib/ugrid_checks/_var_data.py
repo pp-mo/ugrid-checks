@@ -12,6 +12,7 @@ the default is poorly suited), so let's not do that for now.
 For now instead, we fetch the *whole* variable data on demand.
 
 """
+
 from typing import Callable, Union
 
 import netCDF4 as nc

@@ -2,6 +2,7 @@
 Some common test fixtures for checker testing.
 
 """
+
 from pytest import fixture
 
 from .. import cdl_scanner
