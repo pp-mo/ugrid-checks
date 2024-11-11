@@ -49,13 +49,13 @@ repos:
         args: [--filter-files]
 
 -   repo: https://github.com/asottile/blacken-docs
-    rev: 1.19.0
+    rev: 1.19.1
     hooks:
     -   id: blacken-docs
         types: [file, rst]
 
 -   repo: https://github.com/aio-libs/sort-all
-    rev: v1.2.0
+    rev: v1.3.0
     hooks:
     -   id: sort-all
         types: [file, python]
